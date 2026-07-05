@@ -46,14 +46,24 @@ public sealed class OllamaClient : ITranscriptCleaner
             using var req = new HttpRequestMessage(HttpMethod.Post,
                 _cfg.Ollama.Url.TrimEnd('/') + "/api/generate")
             { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+            // HttpClient.Timeout does not bound the body read once ResponseHeadersRead
+            // completes SendAsync — a stalled stream would otherwise hang forever. Bound
+            // it explicitly with a linked token. NOTE: a linked-timeout cancellation has
+            // ct.IsCancellationRequested == false, so it falls through to the general
+            // catch below (raw-transcript passthrough) — the caller-cancellation catch
+            // clause's semantics are unchanged.
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            linked.CancelAfter(TimeSpan.FromSeconds(_cfg.Ollama.TimeoutSeconds));
+
             using var resp = await _http.SendAsync(req,
-                HttpCompletionOption.ResponseHeadersRead, ct);
+                HttpCompletionOption.ResponseHeadersRead, linked.Token);
             resp.EnsureSuccessStatusCode();
 
             var sb = new StringBuilder();
             using var reader = new StreamReader(
-                await resp.Content.ReadAsStreamAsync(ct));
-            while (await reader.ReadLineAsync(ct) is { } line)
+                await resp.Content.ReadAsStreamAsync(linked.Token));
+            while (await reader.ReadLineAsync(linked.Token) is { } line)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 using var doc = JsonDocument.Parse(line);

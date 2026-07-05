@@ -30,6 +30,12 @@ sealed class FakeInjector(bool ok) : ITextInjector
     { Injected = text; return Task.FromResult(ok); }
 }
 
+sealed class ThrowingInjector : ITextInjector
+{
+    public Task<bool> InjectAsync(string text) =>
+        throw new InvalidOperationException("injector exploded");
+}
+
 sealed class FakeNotifier : IUserNotifier
 {
     public List<string> Toasts = new();
@@ -158,5 +164,89 @@ public class OrchestratorTests
         await o.OnSidecarEventAsync(new SidecarEvent { Event = "error", Where = "asr", Message = "boom" });
         Assert.Contains(n.Toasts, t => t.Contains("asr") && t.Contains("boom"));
         Assert.Equal(FlowState.Idle, o.State);
+    }
+
+    [Fact]
+    public async Task ReadyEvent_ResetsWedgedState_AndNextHotkeyWorks()
+    {
+        var sc = new FakeSidecar();
+        var o = Make(sc, new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), new FakeNotifier());
+
+        // Drive into Transcribing (a "wedged" mid-flow state after a sidecar restart).
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        Assert.Equal(FlowState.Transcribing, o.State);
+
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "ready", Engine = "gpu" });
+        Assert.Equal(FlowState.Idle, o.State);
+
+        // Next hotkey-down must actually start a new utterance (proves not still wedged).
+        await o.OnHotkeyDownAsync();
+        Assert.Equal(FlowState.Recording, o.State);
+        Assert.Equal(2, sc.Starts);
+    }
+
+    [Fact]
+    public async Task HandleFinal_InjectorThrows_StillReturnsToIdle()
+    {
+        var n = new FakeNotifier();
+        var cl = new FakeCleaner(new CleanupResult("clean text", false, null));
+        var o = Make(new FakeSidecar(), cl, new ThrowingInjector(), n);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        // The throw propagates (callers like App's FireAndForget already log+toast it),
+        // but the `finally` must still guarantee the state machine returns to Idle —
+        // pre-fix, a throw here left the orchestrator wedged in Cleaning forever.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "raw" }));
+        Assert.Equal(FlowState.Idle, o.State);
+    }
+
+    [Fact]
+    public async Task UtteranceTimeout_TranscribingTooLong_ToastsAndReturnsIdle()
+    {
+        var sc = new FakeSidecar();
+        var n = new FakeNotifier();
+        var o = Make(sc, new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), n);
+        o.UtteranceTimeoutMs = 50;
+
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        Assert.Equal(FlowState.Transcribing, o.State);
+
+        await Task.Delay(150);
+
+        Assert.Equal(FlowState.Idle, o.State);
+        Assert.Contains(n.Toasts, t => t.Contains("timed out"));
+    }
+
+    [Fact]
+    public async Task UtteranceTimeout_StaleTimerDoesNotFireOnLaterUtterance()
+    {
+        var sc = new FakeSidecar();
+        var cl = new FakeCleaner(new CleanupResult("clean", false, null));
+        var inj = new FakeInjector(true);
+        var n = new FakeNotifier();
+        var o = Make(sc, cl, inj, n);
+        o.UtteranceTimeoutMs = 80;
+
+        // First utterance completes normally — its 80ms timer is now stale.
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "one" });
+        Assert.Equal(FlowState.Idle, o.State);
+
+        // Second utterance uses a much longer timeout so only a buggy *stale* firing
+        // from utterance 1's timer could produce a toast/Idle transition here.
+        o.UtteranceTimeoutMs = 10_000;
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+
+        await Task.Delay(150); // long enough for the stale first timer to have fired
+
+        Assert.DoesNotContain(n.Toasts, t => t.Contains("timed out"));
+        Assert.Equal(FlowState.Transcribing, o.State); // second utterance untouched
     }
 }

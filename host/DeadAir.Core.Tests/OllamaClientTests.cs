@@ -24,6 +24,48 @@ file sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> resp
     }
 }
 
+/// <summary>Content whose stream never produces a line and never completes on its own —
+/// simulates a stalled/hanging Ollama body so the read must be bounded by the caller's
+/// timeout rather than hanging forever (HttpClient.Timeout does not apply to body reads
+/// once ResponseHeadersRead completes the SendAsync call).</summary>
+file sealed class HangingStreamContent : HttpContent
+{
+    protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+        Task.Delay(Timeout.Infinite);
+
+    protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context,
+        CancellationToken ct) => Task.Delay(Timeout.Infinite, ct);
+
+    protected override bool TryComputeLength(out long length) { length = 0; return false; }
+
+    protected override Task<Stream> CreateContentReadStreamAsync() =>
+        Task.FromResult<Stream>(new HangingStream());
+
+    protected override Task<Stream> CreateContentReadStreamAsync(CancellationToken ct) =>
+        CreateContentReadStreamAsync();
+
+    private sealed class HangingStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer, offset, count, default).GetAwaiter().GetResult();
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count,
+            CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct); // never returns unless cancelled
+            return 0;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+}
+
 public class OllamaClientTests
 {
     private static AppConfig Cfg() => new();
@@ -88,5 +130,29 @@ public class OllamaClientTests
         var longText = new string('x', 60);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => client.CleanAsync(longText, CleanupMode.Faithful, cts.Token));
+    }
+
+    [Fact]
+    public async Task HangingBodyStream_BoundedByOllamaTimeout_ReturnsRawTranscript()
+    {
+        // ResponseHeadersRead completes SendAsync as soon as headers arrive, so
+        // HttpClient.Timeout does NOT bound the subsequent body read. A stalled body
+        // (network hiccup, model wedged) must still be bounded by _cfg.Ollama.TimeoutSeconds,
+        // not hang forever.
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new HangingStreamContent() });
+        var cfg = Cfg();
+        cfg.Ollama.TimeoutSeconds = 1; // real seconds — test must complete quickly regardless
+        var client = new OllamaClient(cfg, handler);
+        var longText = new string('x', 60);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var r = await client.CleanAsync(longText, CleanupMode.Faithful);
+        sw.Stop();
+
+        Assert.True(r.Skipped);
+        Assert.Equal(longText, r.Text);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10),
+            $"expected the stalled body read to be bounded by the ~1s timeout, took {sw.Elapsed}");
     }
 }

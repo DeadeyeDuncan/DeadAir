@@ -29,6 +29,13 @@ file sealed class RestoreThrowingClipboard : IClipboard
     }
 }
 
+file sealed class AlwaysThrowingClipboard : IClipboard
+{
+    public string? GetText() => null;
+    public void SetText(string text) =>
+        throw new InvalidOperationException("CLIPBRD_E_CANT_OPEN");
+}
+
 public class InjectTests
 {
     [Fact]
@@ -114,5 +121,19 @@ public class InjectTests
             new IInjectionStrategy[] { paste, typer }, clip);
         Assert.True(await inj.InjectAsync("hello"));
         Assert.Equal(0, typer.Calls); // fallback must never fire
+    }
+
+    [Fact]
+    public async Task Composite_AllStrategiesFail_ClipboardSetTextThrows_ReturnsFalseWithoutThrowing()
+    {
+        // Last-resort "never lose words" clipboard fallback (spec §4.1 rule 3) — if the
+        // clipboard itself is contended and SetText throws, InjectAsync must still return
+        // false rather than let the exception escape and wedge the orchestrator's state.
+        var clip = new AlwaysThrowingClipboard();
+        var inj = new CompositeInjector(
+            new IInjectionStrategy[] { new FakeStrategy(false), new FakeStrategy(false) },
+            clip);
+        var ok = await inj.InjectAsync("precious words");
+        Assert.False(ok);
     }
 }

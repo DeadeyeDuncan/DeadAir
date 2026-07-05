@@ -21,6 +21,11 @@ public sealed class Orchestrator(
     private readonly Stopwatch _clock = new();
     private readonly object _gate = new();
     private bool _degradedToastShown;
+    private long _utteranceId;
+
+    /// <summary>Per-utterance ASR timeout (spec §3/§4.1). Settable for tests; production
+    /// default is 60s.</summary>
+    internal int UtteranceTimeoutMs { get; set; } = 60_000;
 
     public FlowState State { get; private set; } = FlowState.Idle;
     public CleanupMode Mode { get; set; } = config.Cleanup.Mode;
@@ -41,30 +46,50 @@ public sealed class Orchestrator(
 
     public async Task OnHotkeyUpAsync()
     {
+        long myUtterance;
         lock (_gate)
         {
             if (State != FlowState.Recording) return;
             SetState(FlowState.Transcribing);
             _clock.Restart();
+            myUtterance = ++_utteranceId;
         }
+        ScheduleUtteranceTimeout(myUtterance);
         await sidecar.StopUtteranceAsync();
+    }
+
+    private void ScheduleUtteranceTimeout(long utteranceId)
+    {
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(UtteranceTimeoutMs);
+            lock (_gate)
+            {
+                if (_utteranceId != utteranceId || State != FlowState.Transcribing) return;
+                SetState(FlowState.Idle);
+            }
+            notifier.Toast("ASR timed out");
+        });
     }
 
     public async Task OnSidecarEventAsync(SidecarEvent e)
     {
         switch (e.Event)
         {
+            case "ready":
+                lock (_gate) { _utteranceId++; SetState(FlowState.Idle); }
+                break;
             case "final":
                 bool proceed;
                 lock (_gate)
                 {
                     proceed = State == FlowState.Transcribing;
-                    if (proceed) SetState(FlowState.Cleaning);
+                    if (proceed) { _utteranceId++; SetState(FlowState.Cleaning); }
                 }
                 if (proceed) await HandleFinalAsync(e);
                 break;
             case "empty":
-                SetState(FlowState.Idle);
+                lock (_gate) { _utteranceId++; SetState(FlowState.Idle); }
                 break;
             case "degraded":
                 if (!_degradedToastShown)
@@ -74,27 +99,33 @@ public sealed class Orchestrator(
                 }
                 break;
             case "error":
+                lock (_gate) { _utteranceId++; SetState(FlowState.Idle); }
                 notifier.Toast($"Error ({e.Where}): {e.Message}");
-                SetState(FlowState.Idle);
                 break;
         }
     }
 
     private async Task HandleFinalAsync(SidecarEvent e)
     {
-        var asrMs = _clock.ElapsedMilliseconds;
-        var result = await cleaner.CleanAsync(e.Text ?? "", Mode);
-        var cleanMs = _clock.ElapsedMilliseconds - asrMs;
-        if (result.Skipped && result.Reason != "below skip guard")
-            notifier.Toast($"cleanup skipped: {result.Reason}");
+        try
+        {
+            var asrMs = _clock.ElapsedMilliseconds;
+            var result = await cleaner.CleanAsync(e.Text ?? "", Mode);
+            var cleanMs = _clock.ElapsedMilliseconds - asrMs;
+            if (result.Skipped && result.Reason != "below skip guard")
+                notifier.Toast($"cleanup skipped: {result.Reason}");
 
-        SetState(FlowState.Injecting);
-        var ok = await injector.InjectAsync(result.Text);
-        if (!ok)
-            notifier.Toast("Couldn't insert — text on clipboard, press Ctrl+V");
-        LatencyLogged?.Invoke(
-            $"asr={e.Ms ?? asrMs}ms clean={cleanMs}ms " +
-            $"total={_clock.ElapsedMilliseconds}ms chars={result.Text.Length}");
-        SetState(FlowState.Idle);
+            SetState(FlowState.Injecting);
+            var ok = await injector.InjectAsync(result.Text);
+            if (!ok)
+                notifier.Toast("Couldn't insert — text on clipboard, press Ctrl+V");
+            LatencyLogged?.Invoke(
+                $"asr={e.Ms ?? asrMs}ms clean={cleanMs}ms " +
+                $"total={_clock.ElapsedMilliseconds}ms chars={result.Text.Length}");
+        }
+        finally
+        {
+            SetState(FlowState.Idle);
+        }
     }
 }

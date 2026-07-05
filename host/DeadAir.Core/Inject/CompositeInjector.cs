@@ -11,7 +11,8 @@ public sealed class CompositeInjector(
             try { if (await s.TryInjectAsync(text)) return true; }
             catch { /* try next strategy */ }
         }
-        clipboard.SetText(text); // never lose words (spec §4.1 rule 3)
+        try { clipboard.SetText(text); } // never lose words (spec §4.1 rule 3)
+        catch { /* clipboard contention — nothing left to fall back to; report failure */ }
         return false;
     }
 }
