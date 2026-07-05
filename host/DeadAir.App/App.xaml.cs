@@ -55,20 +55,34 @@ public partial class App : Application
         _orchestrator.LatencyLogged += line =>
             _log.WriteLine($"{DateTime.Now:HH:mm:ss} {line}");
         _sidecar.EventReceived += ev =>
-            _ = _orchestrator.OnSidecarEventAsync(ev);
+            FireAndForget(() => _orchestrator.OnSidecarEventAsync(ev), "sidecar-event");
         _sidecar.Faulted += () =>
             notifier.Toast("Sidecar keeps crashing — check logs.");
 
         var machine = new HoldKeyStateMachine(
             VkMap.Resolve(_config.Hotkey.Key));
         // Hook-thread callbacks must return fast: fire-and-forget to the pool.
-        machine.HoldStarted += () => _ = _orchestrator.OnHotkeyDownAsync();
-        machine.HoldEnded += () => _ = _orchestrator.OnHotkeyUpAsync();
+        machine.HoldStarted += () => FireAndForget(_orchestrator.OnHotkeyDownAsync, "hotkey-down");
+        machine.HoldEnded += () => FireAndForget(_orchestrator.OnHotkeyUpAsync, "hotkey-up");
         _hook = new KeyboardHook(machine);
 
         try { await _sidecar.LaunchAsync(); }
         catch (Exception ex)
         { notifier.Toast($"Sidecar failed to start: {ex.Message}"); }
+    }
+
+    private void FireAndForget(Func<Task> action, string where)
+    {
+        _ = Task.Run(async () =>
+        {
+            try { await action(); }
+            catch (Exception ex)
+            {
+                _log.WriteLine($"{DateTime.Now:HH:mm:ss} ERROR {where}: {ex}");
+                _ = Dispatcher.BeginInvoke(() =>
+                    _tray.ShowNotification("DeadAir", $"Error ({where}): {ex.Message}"));
+            }
+        });
     }
 
     private System.Windows.Controls.ContextMenu BuildMenu()
@@ -88,9 +102,13 @@ public partial class App : Application
         var exit = new System.Windows.Controls.MenuItem { Header = "Exit" };
         exit.Click += async (_, _) =>
         {
-            _hook.Dispose();
-            await _sidecar.ShutdownAsync();
-            Shutdown();
+            try
+            {
+                _hook.Dispose();
+                await _sidecar.ShutdownAsync();
+            }
+            catch (Exception ex) { _log.WriteLine($"{DateTime.Now:HH:mm:ss} ERROR exit: {ex}"); }
+            finally { _log.Dispose(); Shutdown(); }
         };
 
         menu.Items.Add(mode);
