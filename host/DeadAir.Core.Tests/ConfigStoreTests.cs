@@ -25,6 +25,8 @@ public class ConfigStoreTests
         cfg.Dictionary.Add("DeadMind");
         cfg.Cleanup.Mode = CleanupMode.Polished;
         ConfigStore.Save(cfg, path);
+        var rawJson = File.ReadAllText(path);
+        Assert.Contains("\"Polished\"", rawJson);
         var loaded = ConfigStore.Load(path);
         Assert.Contains("DeadMind", loaded.Dictionary);
         Assert.Equal(CleanupMode.Polished, loaded.Cleanup.Mode);
