@@ -49,7 +49,7 @@ in any app — with speech recognition and LLM cleanup running entirely on-devic
 Two cooperating processes plus a warm ASR server:
 
 ```
-┌─ FlowClone.exe (C#/.NET 8 WPF host) ─────────────┐  stdio JSON-lines  ┌─ asr_sidecar.py ────────────┐
+┌─ DeadAir.App.exe (C#/.NET 8 WPF host) ──────────┐  stdio JSON-lines  ┌─ asr_sidecar.py ────────────┐
 │ GlobalHotkey (WH_KEYBOARD_LL)                     │◀──────────────────▶│ mic capture (sounddevice)   │
 │ SidecarManager (spawn/monitor/restart, IPC)       │  start/stop/config  │ Silero VAD                  │
 │ OllamaClient (HTTP localhost:11434)               │  ready/final/error  │ ASR engine selector:        │
