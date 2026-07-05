@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import subprocess
 import sys
@@ -5,6 +6,16 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _readline_with_timeout(proc, timeout=60):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(proc.stdout.readline)
+        try:
+            return fut.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            proc.kill()
+            raise AssertionError(f"sidecar produced no output within {timeout}s")
 
 
 @pytest.mark.integration
@@ -22,7 +33,8 @@ def test_sidecar_end_to_end_cpu(tmp_path):
 
     def events_until(name, limit=20):
         for _ in range(limit):
-            e = json.loads(proc.stdout.readline())
+            line = _readline_with_timeout(proc)
+            e = json.loads(line)
             if e["event"] == name:
                 return e
         raise AssertionError(f"never saw {name}")

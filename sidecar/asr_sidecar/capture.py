@@ -23,6 +23,7 @@ class MicCapture:
 
     def start(self) -> None:
         import sounddevice as sd
+        self._close_stream()
         with self._lock:
             self._frames = []
             self._recording = True

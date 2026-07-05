@@ -17,3 +17,26 @@ def test_cancel_discards():
     cap._on_frames(np.ones(160, dtype=np.float32))
     cap.cancel()
     assert len(cap.stop()) == 0
+
+
+def test_start_twice_closes_first_stream(monkeypatch):
+    import asr_sidecar.capture as capture_mod
+
+    class FakeStream:
+        instances = []
+        def __init__(self, **kw):
+            self.stopped = False
+            self.closed = False
+            FakeStream.instances.append(self)
+        def start(self): pass
+        def stop(self): self.stopped = True
+        def close(self): self.closed = True
+
+    import sounddevice as sd
+    monkeypatch.setattr(sd, "InputStream", FakeStream)
+    cap = capture_mod.MicCapture()
+    cap.start()
+    cap.start()
+    assert len(FakeStream.instances) == 2
+    assert FakeStream.instances[0].stopped and FakeStream.instances[0].closed
+    cap.cancel()

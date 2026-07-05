@@ -46,6 +46,8 @@ def main() -> None:
                 if engine:
                     engine.close()
                 engine = create_engine(cfg, emit)
+                if cap is not None:
+                    cap.cancel()
                 cap = MicCapture(cfg.mic)
                 emit({"event": "ready", "engine": engine.name,
                       "model": cfg.model if engine.name == "gpu"
