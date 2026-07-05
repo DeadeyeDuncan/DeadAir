@@ -15,12 +15,15 @@ public sealed class SidecarManager : ISidecarControl, IDisposable
 {
     private static readonly int[] BackoffSeconds = { 1, 2, 4, 8, 16, 30 };
     private readonly AppConfig _config;
+    private readonly Queue<string> _stderrLines = new();
     private Process? _proc;
     private int _consecutiveFailures;
-    private bool _shuttingDown;
+    private volatile bool _shuttingDown;
 
     public event Action<SidecarEvent>? EventReceived;
     public event Action? Faulted;
+
+    public string RecentStderr { get { lock (_stderrLines) return string.Join(Environment.NewLine, _stderrLines); } }
 
     public SidecarManager(AppConfig config) => _config = config;
 
@@ -30,7 +33,7 @@ public sealed class SidecarManager : ISidecarControl, IDisposable
         _proc = Process.Start(new ProcessStartInfo
         {
             FileName = s.Python,
-            Arguments = QuoteArgsWithSpaces(s.Args),
+            Arguments = s.Args,
             WorkingDirectory = Path.GetFullPath(s.WorkingDir,
                 AppContext.BaseDirectory),
             RedirectStandardInput = true,
@@ -42,28 +45,29 @@ public sealed class SidecarManager : ISidecarControl, IDisposable
         }) ?? throw new InvalidOperationException("failed to start sidecar");
         _proc.StandardInput.AutoFlush = true;
 
-        _ = Task.Run(ReadLoopAsync);
-        _ = Task.Run(() => _proc.StandardError.ReadToEndAsync()); // drain
-        await SendConfigAsync(_config);
-    }
-
-    // ProcessStartInfo.Arguments is a raw command-line string: a space
-    // inside an unquoted path splits it into two argv entries. The real
-    // config passes multi-flag strings ("-m asr_sidecar") that are meant
-    // to be separate tokens, but callers (tests, or installs under
-    // space-containing directories) may instead pass a single path that
-    // itself contains spaces. If the whole string resolves to one file on
-    // disk, treat it as a single argument and quote it; otherwise pass it
-    // through untouched.
-    private static string QuoteArgsWithSpaces(string args)
-    {
-        if (args.Length > 0 && args.Contains(' ') &&
-            !(args.StartsWith('"') && args.EndsWith('"')) &&
-            File.Exists(args))
+        _ = Task.Run(async () =>
         {
-            return $"\"{args}\"";
-        }
-        return args;
+            try { await ReadLoopAsync(); }
+            catch { Faulted?.Invoke(); }
+        });
+
+        var proc = _proc!;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (await proc.StandardError.ReadLineAsync() is { } line)
+                {
+                    lock (_stderrLines)
+                    {
+                        _stderrLines.Enqueue(line);
+                        while (_stderrLines.Count > 50) _stderrLines.Dequeue();
+                    }
+                }
+            }
+            catch { /* stream closed */ }
+        });
+        await SendConfigAsync(_config);
     }
 
     private async Task ReadLoopAsync()

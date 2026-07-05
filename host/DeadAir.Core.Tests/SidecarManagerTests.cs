@@ -10,8 +10,7 @@ public class SidecarManagerTests
         Sidecar = new SidecarLaunchConfig
         {
             Python = "python",
-            Args = Path.Combine(AppContext.BaseDirectory,
-                                "fixtures", "fake_sidecar.py"),
+            Args = $"\"{Path.Combine(AppContext.BaseDirectory, "fixtures", "fake_sidecar.py")}\"",
             WorkingDir = AppContext.BaseDirectory,
         }
     };
