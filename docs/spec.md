@@ -1,4 +1,4 @@
-# LocalFlow — Design Spec
+# DeadAir — Design Spec
 
 A fully-local clone of Wispr Flow (voice dictation) for Windows 11 on an all-AMD
 box. Hold a hotkey, speak, and cleaned/formatted text is inserted at the cursor
@@ -168,9 +168,9 @@ the configured model is pulled; if not, prompts the user (or offers auto-pull).
 the sidecar `config.dictionary` → Whisper `initial_prompt` to bias recognition,
 and (b) appended to the LLM system prompt as "preserve these terms exactly".
 
-**Config** — JSON at `%APPDATA%\LocalFlow\config.json` (schema §6). Loaded at
+**Config** — JSON at `%APPDATA%\DeadAir\config.json` (schema §6). Loaded at
 startup, hot-reloaded on settings save. Structured logging to
-`%APPDATA%\LocalFlow\logs\`.
+`%APPDATA%\DeadAir\logs\`.
 
 **Tray + Settings (WPF)** — Tray icon reflects state (idle / recording /
 transcribing / cleaning / injecting / error) and offers: quick mode toggle
@@ -249,7 +249,7 @@ tasks later; not required for MVP.
 
 ## 6. Config schema
 
-`%APPDATA%\LocalFlow\config.json`:
+`%APPDATA%\DeadAir\config.json`:
 ```json
 {
   "hotkey": { "key": "RControl+RWin", "mode": "hold" },
@@ -353,8 +353,8 @@ Reference skeleton: [`cjpais/Handy`](https://github.com/cjpais/Handy) (Rust).
 - Scope: **Core + light polish** (tray, settings, dictionary in MVP).
 
 ## 12. Open items to confirm at review
-- Project name ("LocalFlow" placeholder) and location
-  (`H:\DeadMind V.3\LocalFlow\` with `host/` + `sidecar/`).
+- Project name ("DeadAir" placeholder) and location
+  (`H:\DeadMind V.3\DeadAir\` with `host/` + `sidecar/`).
 - Default hotkey (spec assumes a held combo; Wispr's default is Ctrl+Win).
 - Whether to package the Python sidecar as a bundled exe (PyInstaller) or ship
   it as a venv for v0.

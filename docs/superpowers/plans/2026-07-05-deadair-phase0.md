@@ -1,4 +1,4 @@
-# LocalFlow Phase 0 (MVP) Implementation Plan
+# DeadAir Phase 0 (MVP) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Repo root: `H:\DeadMind V.3\LocalFlow\`. Host code in `host/`, sidecar in `sidecar/`, binaries in `tools/` (gitignored), GGML models in `models/` (gitignored).
+- Repo root: `H:\DeadMind V.3\DeadAir\`. Host code in `host/`, sidecar in `sidecar/`, binaries in `tools/` (gitignored), GGML models in `models/` (gitignored).
 - Target: Windows 11, AMD RX 6800 XT (gfx1030). **No CUDA anywhere.** GPU ASR = whisper.cpp **Vulkan** only; faster-whisper is **CPU-only** (CTranslate2 has no AMD-GPU path on Windows).
 - Ollama: `qwen2.5:7b`, `temperature 0.1`, `num_ctx 8192`, version ≥ **0.12.11** (older 0.12.x crashes on gfx1030).
 - Cleanup skip-guard: transcripts **< 50 chars** bypass the LLM (configurable `skipGuardChars`).
@@ -20,7 +20,7 @@
 - Text injection: clipboard-paste primary, Unicode `SendInput` fallback; **never** pynput/pyautogui/`SendKeys`. On total failure, text stays on the clipboard + toast.
 - Sidecar stdout is **protocol-only** (JSON lines). All Python logging goes to **stderr** — a stray `print()` corrupts IPC.
 - Words are never lost: any cleanup failure injects the **raw transcript**.
-- Config: `%APPDATA%\LocalFlow\config.json` (spec §6 schema + a `sidecar` launch section added by Task 7).
+- Config: `%APPDATA%\DeadAir\config.json` (spec §6 schema + a `sidecar` launch section added by Task 7).
 - Commit after every task (repo is initialized in Task 0).
 
 ---
@@ -38,7 +38,7 @@ This task is mostly environment validation (spec §7). GUI steps are manual chec
 - [ ] **Step 1: Init repo**
 
 ```powershell
-cd "H:\DeadMind V.3\LocalFlow"; git init
+cd "H:\DeadMind V.3\DeadAir"; git init
 ```
 
 - [ ] **Step 2: Write `.gitignore`**
@@ -65,12 +65,12 @@ tools/*
 - [ ] **Step 3: Write README stub**
 
 ```markdown
-# LocalFlow
+# DeadAir
 
 Fully-local voice dictation for Windows (Wispr Flow clone).
 Hold Right Ctrl → speak → release → cleaned text at your cursor.
 
-Spec: docs/spec.md · Plan: docs/superpowers/plans/2026-07-05-localflow-phase0.md
+Spec: docs/spec.md · Plan: docs/superpowers/plans/2026-07-05-deadair-phase0.md
 
 ## De-risk checklist (Task 0)
 - [ ] Const-me WhisperDesktop live-mic transcribes on the RX 6800 XT
@@ -137,7 +137,7 @@ httpx>=0.27
 pytest>=8.0
 ```
 ```powershell
-cd "H:\DeadMind V.3\LocalFlow\sidecar"
+cd "H:\DeadMind V.3\DeadAir\sidecar"
 python -m venv .venv
 .venv\Scripts\pip install -r requirements-dev.txt
 ```
@@ -234,7 +234,7 @@ git add sidecar; git commit -m "feat(sidecar): package skeleton + JSON-lines IPC
 - [ ] **Step 1: Copy fixture**
 
 ```powershell
-copy "H:\DeadMind V.3\LocalFlow\models\jfk.wav" "H:\DeadMind V.3\LocalFlow\sidecar\tests\fixtures\jfk.wav"
+copy "H:\DeadMind V.3\DeadAir\models\jfk.wav" "H:\DeadMind V.3\DeadAir\sidecar\tests\fixtures\jfk.wav"
 ```
 
 - [ ] **Step 2: Write failing tests** — `sidecar/tests/test_config.py`:
@@ -565,8 +565,8 @@ class GpuEngine(AsrEngine):
 - [ ] **Step 4: Run to verify pass** — same command. Expected: 2 PASS, 1 SKIP. Then run the integration test once for real:
 
 ```powershell
-$env:LOCALFLOW_WHISPER_SERVER = "H:\DeadMind V.3\LocalFlow\tools\whisper\whisper-server.exe"
-$env:LOCALFLOW_WHISPER_MODEL  = "H:\DeadMind V.3\LocalFlow\models\ggml-large-v3-turbo.bin"
+$env:LOCALFLOW_WHISPER_SERVER = "H:\DeadMind V.3\DeadAir\tools\whisper\whisper-server.exe"
+$env:LOCALFLOW_WHISPER_MODEL  = "H:\DeadMind V.3\DeadAir\models\ggml-large-v3-turbo.bin"
 .venv\Scripts\python -m pytest tests/test_gpu_engine.py -v -m integration
 ```
 Expected: 1 PASS (real Vulkan transcription on the 6800 XT).
@@ -794,7 +794,7 @@ class MicCapture:
 `sidecar/asr_sidecar/__main__.py`:
 
 ```python
-"""LocalFlow ASR sidecar. Protocol: spec.md §3. stdout = protocol only."""
+"""DeadAir ASR sidecar. Protocol: spec.md §3. stdout = protocol only."""
 import logging
 import sys
 import time
@@ -883,8 +883,8 @@ if __name__ == "__main__":
 ### Task 7: Host solution + config store
 
 **Files:**
-- Create: `host/LocalFlow.sln`, `host/LocalFlow.Core/LocalFlow.Core.csproj`, `host/LocalFlow.Core/Config/AppConfig.cs`, `host/LocalFlow.Core/Config/ConfigStore.cs`, `host/LocalFlow.Core.Tests/LocalFlow.Core.Tests.csproj`
-- Test: `host/LocalFlow.Core.Tests/ConfigStoreTests.cs`
+- Create: `host/DeadAir.sln`, `host/DeadAir.Core/DeadAir.Core.csproj`, `host/DeadAir.Core/Config/AppConfig.cs`, `host/DeadAir.Core/Config/ConfigStore.cs`, `host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj`
+- Test: `host/DeadAir.Core.Tests/ConfigStoreTests.cs`
 
 **Interfaces:**
 - Produces: `AppConfig` (spec §6 + `Sidecar` launch section), `ConfigStore.Load(path)` / `Save(config, path)` — round-trip JSON, missing file → defaults. `CleanupMode` enum `{ Faithful, Polished }`. All later host tasks consume `AppConfig`.
@@ -892,21 +892,21 @@ if __name__ == "__main__":
 - [ ] **Step 1: Scaffold**
 
 ```powershell
-cd "H:\DeadMind V.3\LocalFlow\host"
-dotnet new sln -n LocalFlow
-dotnet new classlib -n LocalFlow.Core -f net8.0
-dotnet new xunit -n LocalFlow.Core.Tests -f net8.0
-dotnet sln add LocalFlow.Core LocalFlow.Core.Tests
-dotnet add LocalFlow.Core.Tests reference LocalFlow.Core
-del LocalFlow.Core\Class1.cs; del LocalFlow.Core.Tests\UnitTest1.cs
+cd "H:\DeadMind V.3\DeadAir\host"
+dotnet new sln -n DeadAir
+dotnet new classlib -n DeadAir.Core -f net8.0
+dotnet new xunit -n DeadAir.Core.Tests -f net8.0
+dotnet sln add DeadAir.Core DeadAir.Core.Tests
+dotnet add DeadAir.Core.Tests reference DeadAir.Core
+del DeadAir.Core\Class1.cs; del DeadAir.Core.Tests\UnitTest1.cs
 ```
 
-- [ ] **Step 2: Write failing test** — `host/LocalFlow.Core.Tests/ConfigStoreTests.cs`:
+- [ ] **Step 2: Write failing test** — `host/DeadAir.Core.Tests/ConfigStoreTests.cs`:
 
 ```csharp
-using LocalFlow.Core.Config;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.Core.Tests;
+namespace DeadAir.Core.Tests;
 
 public class ConfigStoreTests
 {
@@ -940,12 +940,12 @@ public class ConfigStoreTests
 
 - [ ] **Step 3: Run to verify failure** — `dotnet test` — Expected: compile FAIL (types missing).
 
-- [ ] **Step 4: Implement** — `host/LocalFlow.Core/Config/AppConfig.cs`:
+- [ ] **Step 4: Implement** — `host/DeadAir.Core/Config/AppConfig.cs`:
 
 ```csharp
 using System.Text.Json.Serialization;
 
-namespace LocalFlow.Core.Config;
+namespace DeadAir.Core.Config;
 
 [JsonConverter(typeof(JsonStringEnumConverter<CleanupMode>))]
 public enum CleanupMode { Faithful, Polished }
@@ -1028,12 +1028,12 @@ public sealed class SidecarLaunchConfig
 }
 ```
 
-`host/LocalFlow.Core/Config/ConfigStore.cs`:
+`host/DeadAir.Core/Config/ConfigStore.cs`:
 
 ```csharp
 using System.Text.Json;
 
-namespace LocalFlow.Core.Config;
+namespace DeadAir.Core.Config;
 
 public static class ConfigStore
 {
@@ -1046,7 +1046,7 @@ public static class ConfigStore
 
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "LocalFlow", "config.json");
+        "DeadAir", "config.json");
 
     public static AppConfig Load(string? path = null)
     {
@@ -1073,14 +1073,14 @@ public static class ConfigStore
 ### Task 8: Sidecar DTOs + SidecarManager
 
 **Files:**
-- Create: `host/LocalFlow.Core/Sidecar/SidecarEvent.cs`, `host/LocalFlow.Core/Sidecar/SidecarCommands.cs`, `host/LocalFlow.Core/Sidecar/SidecarManager.cs`
-- Test: `host/LocalFlow.Core.Tests/SidecarManagerTests.cs`, fixture `host/LocalFlow.Core.Tests/fixtures/fake_sidecar.py`
+- Create: `host/DeadAir.Core/Sidecar/SidecarEvent.cs`, `host/DeadAir.Core/Sidecar/SidecarCommands.cs`, `host/DeadAir.Core/Sidecar/SidecarManager.cs`
+- Test: `host/DeadAir.Core.Tests/SidecarManagerTests.cs`, fixture `host/DeadAir.Core.Tests/fixtures/fake_sidecar.py`
 
 **Interfaces:**
 - Consumes: `AppConfig.Sidecar`, `AppConfig.Asr`, `AppConfig.Mic`, `AppConfig.Dictionary` (Task 7).
 - Produces: `SidecarEvent` record (`Event`, `Engine`, `Model`, `Text`, `Ms`, `Reason`, `Where`, `Message`). `ISidecarControl { Task StartUtteranceAsync(); Task StopUtteranceAsync(); Task CancelAsync(); }`. `SidecarManager : ISidecarControl, IDisposable` with `event Action<SidecarEvent>? EventReceived`, `event Action? Faulted`, `Task LaunchAsync()`, `Task SendConfigAsync(AppConfig)`, `Task ShutdownAsync()`. Restarts on unexpected exit with backoff `1,2,4,8,16,30s`, max 5 consecutive failures → `Faulted`. Protocol keys are snake_case (`cpu_model`, `gpu_server_exe`, ...) to match the Python side.
 
-- [ ] **Step 1: Write fixture** — `host/LocalFlow.Core.Tests/fixtures/fake_sidecar.py`:
+- [ ] **Step 1: Write fixture** — `host/DeadAir.Core.Tests/fixtures/fake_sidecar.py`:
 
 ```python
 import json
@@ -1099,20 +1099,20 @@ for line in sys.stdin:
         break
 ```
 
-Add to `LocalFlow.Core.Tests.csproj`:
+Add to `DeadAir.Core.Tests.csproj`:
 ```xml
 <ItemGroup>
   <None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
 </ItemGroup>
 ```
 
-- [ ] **Step 2: Write failing test** — `host/LocalFlow.Core.Tests/SidecarManagerTests.cs`:
+- [ ] **Step 2: Write failing test** — `host/DeadAir.Core.Tests/SidecarManagerTests.cs`:
 
 ```csharp
-using LocalFlow.Core.Config;
-using LocalFlow.Core.Sidecar;
+using DeadAir.Core.Config;
+using DeadAir.Core.Sidecar;
 
-namespace LocalFlow.Core.Tests;
+namespace DeadAir.Core.Tests;
 
 public class SidecarManagerTests
 {
@@ -1153,12 +1153,12 @@ public class SidecarManagerTests
 
 - [ ] **Step 3: Run to verify failure** — `dotnet test --filter SidecarManagerTests` — Expected: compile FAIL.
 
-- [ ] **Step 4: Implement** — `host/LocalFlow.Core/Sidecar/SidecarEvent.cs`:
+- [ ] **Step 4: Implement** — `host/DeadAir.Core/Sidecar/SidecarEvent.cs`:
 
 ```csharp
 using System.Text.Json.Serialization;
 
-namespace LocalFlow.Core.Sidecar;
+namespace DeadAir.Core.Sidecar;
 
 public sealed record SidecarEvent
 {
@@ -1173,13 +1173,13 @@ public sealed record SidecarEvent
 }
 ```
 
-`host/LocalFlow.Core/Sidecar/SidecarCommands.cs`:
+`host/DeadAir.Core/Sidecar/SidecarCommands.cs`:
 
 ```csharp
 using System.Text.Json.Serialization;
-using LocalFlow.Core.Config;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.Core.Sidecar;
+namespace DeadAir.Core.Sidecar;
 
 public sealed record ConfigCommand
 {
@@ -1211,14 +1211,14 @@ public sealed record ConfigCommand
 public sealed record SimpleCommand([property: JsonPropertyName("cmd")] string Cmd);
 ```
 
-`host/LocalFlow.Core/Sidecar/SidecarManager.cs`:
+`host/DeadAir.Core/Sidecar/SidecarManager.cs`:
 
 ```csharp
 using System.Diagnostics;
 using System.Text.Json;
-using LocalFlow.Core.Config;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.Core.Sidecar;
+namespace DeadAir.Core.Sidecar;
 
 public interface ISidecarControl
 {
@@ -1332,20 +1332,20 @@ Note for the test: `fake_sidecar.py` never receives a valid response to the init
 ### Task 9: PromptBuilder + OllamaClient
 
 **Files:**
-- Create: `host/LocalFlow.Core/Cleanup/PromptBuilder.cs`, `host/LocalFlow.Core/Cleanup/OllamaClient.cs`
-- Test: `host/LocalFlow.Core.Tests/PromptBuilderTests.cs`, `host/LocalFlow.Core.Tests/OllamaClientTests.cs`
+- Create: `host/DeadAir.Core/Cleanup/PromptBuilder.cs`, `host/DeadAir.Core/Cleanup/OllamaClient.cs`
+- Test: `host/DeadAir.Core.Tests/PromptBuilderTests.cs`, `host/DeadAir.Core.Tests/OllamaClientTests.cs`
 
 **Interfaces:**
 - Consumes: `AppConfig` (Task 7).
 - Produces: `PromptBuilder.Build(CleanupMode, AppConfig) -> string`. `ITranscriptCleaner { Task<CleanupResult> CleanAsync(string transcript, CleanupMode mode, CancellationToken ct = default); }`. `record CleanupResult(string Text, bool Skipped, string? Reason)`. `OllamaClient(AppConfig cfg, HttpMessageHandler? handler = null) : ITranscriptCleaner`. Behavior: short transcript → skipped without HTTP; any HTTP/parse/timeout error → returns raw transcript with `Skipped=true` (words never lost).
 
-- [ ] **Step 1: Write failing tests** — `host/LocalFlow.Core.Tests/PromptBuilderTests.cs`:
+- [ ] **Step 1: Write failing tests** — `host/DeadAir.Core.Tests/PromptBuilderTests.cs`:
 
 ```csharp
-using LocalFlow.Core.Cleanup;
-using LocalFlow.Core.Config;
+using DeadAir.Core.Cleanup;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.Core.Tests;
+namespace DeadAir.Core.Tests;
 
 public class PromptBuilderTests
 {
@@ -1369,15 +1369,15 @@ public class PromptBuilderTests
 }
 ```
 
-`host/LocalFlow.Core.Tests/OllamaClientTests.cs`:
+`host/DeadAir.Core.Tests/OllamaClientTests.cs`:
 
 ```csharp
 using System.Net;
 using System.Text;
-using LocalFlow.Core.Cleanup;
-using LocalFlow.Core.Config;
+using DeadAir.Core.Cleanup;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.Core.Tests;
+namespace DeadAir.Core.Tests;
 
 file sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond)
     : HttpMessageHandler
@@ -1437,12 +1437,12 @@ public class OllamaClientTests
 
 - [ ] **Step 2: Run to verify failure** — `dotnet test --filter "PromptBuilderTests|OllamaClientTests"` — Expected: compile FAIL.
 
-- [ ] **Step 3: Implement** — `host/LocalFlow.Core/Cleanup/PromptBuilder.cs`:
+- [ ] **Step 3: Implement** — `host/DeadAir.Core/Cleanup/PromptBuilder.cs`:
 
 ```csharp
-using LocalFlow.Core.Config;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.Core.Cleanup;
+namespace DeadAir.Core.Cleanup;
 
 public static class PromptBuilder
 {
@@ -1458,14 +1458,14 @@ public static class PromptBuilder
 }
 ```
 
-`host/LocalFlow.Core/Cleanup/OllamaClient.cs`:
+`host/DeadAir.Core/Cleanup/OllamaClient.cs`:
 
 ```csharp
 using System.Text;
 using System.Text.Json;
-using LocalFlow.Core.Config;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.Core.Cleanup;
+namespace DeadAir.Core.Cleanup;
 
 public interface ITranscriptCleaner
 {
@@ -1545,18 +1545,18 @@ public sealed class OllamaClient : ITranscriptCleaner
 ### Task 10: Text injection stack
 
 **Files:**
-- Create: `host/LocalFlow.Core/Inject/ITextInjector.cs`, `host/LocalFlow.Core/Inject/NativeInput.cs`, `host/LocalFlow.Core/Inject/SendInputInjector.cs`, `host/LocalFlow.Core/Inject/ClipboardPasteInjector.cs`, `host/LocalFlow.Core/Inject/CompositeInjector.cs`
-- Test: `host/LocalFlow.Core.Tests/InjectTests.cs`
+- Create: `host/DeadAir.Core/Inject/ITextInjector.cs`, `host/DeadAir.Core/Inject/NativeInput.cs`, `host/DeadAir.Core/Inject/SendInputInjector.cs`, `host/DeadAir.Core/Inject/ClipboardPasteInjector.cs`, `host/DeadAir.Core/Inject/CompositeInjector.cs`
+- Test: `host/DeadAir.Core.Tests/InjectTests.cs`
 
 **Interfaces:**
 - Produces: `ITextInjector { Task<bool> InjectAsync(string text); }` (composite: true = inserted; false = all strategies failed, **text left on clipboard**). `IInjectionStrategy { Task<bool> TryInjectAsync(string text); }`. `IClipboard { string? GetText(); void SetText(string text); }` (WPF implementation in Task 13; tests use fakes). `NativeInput.BuildUnicodeInputs(string) -> (ushort code, bool isReturn)[]` — pure, testable; `\r\n`/`\n` become VK_RETURN; .NET strings are already UTF-16 so surrogate pairs arrive as two units naturally.
 
-- [ ] **Step 1: Write failing tests** — `host/LocalFlow.Core.Tests/InjectTests.cs`:
+- [ ] **Step 1: Write failing tests** — `host/DeadAir.Core.Tests/InjectTests.cs`:
 
 ```csharp
-using LocalFlow.Core.Inject;
+using DeadAir.Core.Inject;
 
-namespace LocalFlow.Core.Tests;
+namespace DeadAir.Core.Tests;
 
 file sealed class FakeClipboard : IClipboard
 {
@@ -1634,10 +1634,10 @@ public class InjectTests
 
 - [ ] **Step 2: Run to verify failure** — Expected: compile FAIL.
 
-- [ ] **Step 3: Implement** — `host/LocalFlow.Core/Inject/ITextInjector.cs`:
+- [ ] **Step 3: Implement** — `host/DeadAir.Core/Inject/ITextInjector.cs`:
 
 ```csharp
-namespace LocalFlow.Core.Inject;
+namespace DeadAir.Core.Inject;
 
 public interface ITextInjector
 {
@@ -1657,12 +1657,12 @@ public interface IClipboard
 }
 ```
 
-`host/LocalFlow.Core/Inject/NativeInput.cs`:
+`host/DeadAir.Core/Inject/NativeInput.cs`:
 
 ```csharp
 using System.Runtime.InteropServices;
 
-namespace LocalFlow.Core.Inject;
+namespace DeadAir.Core.Inject;
 
 public static class NativeInput
 {
@@ -1749,10 +1749,10 @@ public static class NativeInput
 }
 ```
 
-`host/LocalFlow.Core/Inject/SendInputInjector.cs`:
+`host/DeadAir.Core/Inject/SendInputInjector.cs`:
 
 ```csharp
-namespace LocalFlow.Core.Inject;
+namespace DeadAir.Core.Inject;
 
 public sealed class SendInputInjector : IInjectionStrategy
 {
@@ -1761,10 +1761,10 @@ public sealed class SendInputInjector : IInjectionStrategy
 }
 ```
 
-`host/LocalFlow.Core/Inject/ClipboardPasteInjector.cs`:
+`host/DeadAir.Core/Inject/ClipboardPasteInjector.cs`:
 
 ```csharp
-namespace LocalFlow.Core.Inject;
+namespace DeadAir.Core.Inject;
 
 public sealed class ClipboardPasteInjector(
     IClipboard clipboard, Func<bool> sendPaste, int restoreDelayMs)
@@ -1783,10 +1783,10 @@ public sealed class ClipboardPasteInjector(
 }
 ```
 
-`host/LocalFlow.Core/Inject/CompositeInjector.cs`:
+`host/DeadAir.Core/Inject/CompositeInjector.cs`:
 
 ```csharp
-namespace LocalFlow.Core.Inject;
+namespace DeadAir.Core.Inject;
 
 public sealed class CompositeInjector(
     IReadOnlyList<IInjectionStrategy> strategies, IClipboard clipboard)
@@ -1813,18 +1813,18 @@ public sealed class CompositeInjector(
 ### Task 11: Hold-to-talk hotkey
 
 **Files:**
-- Create: `host/LocalFlow.Core/Hotkey/HoldKeyStateMachine.cs`, `host/LocalFlow.Core/Hotkey/VkMap.cs`, `host/LocalFlow.Core/Hotkey/KeyboardHook.cs`
-- Test: `host/LocalFlow.Core.Tests/HotkeyTests.cs`
+- Create: `host/DeadAir.Core/Hotkey/HoldKeyStateMachine.cs`, `host/DeadAir.Core/Hotkey/VkMap.cs`, `host/DeadAir.Core/Hotkey/KeyboardHook.cs`
+- Test: `host/DeadAir.Core.Tests/HotkeyTests.cs`
 
 **Interfaces:**
 - Produces: `HoldKeyStateMachine(int vkCode)` with `event Action? HoldStarted`, `event Action? HoldEnded`, `void OnKeyEvent(int vk, bool isDown, bool injected)`. `VkMap.Resolve("RControl") -> 0xA3` (also: RAlt 0xA5, F13–F24, CapsLock 0x14; unknown throws `ArgumentException`). `KeyboardHook : IDisposable` — dedicated thread, `SetWindowsHookEx(WH_KEYBOARD_LL)`, message pump, forwards to the state machine, ignores `LLKHF_INJECTED` events (so our own SendInput/Ctrl+V can't re-trigger recording), trivial callback (spec §D6: a slow callback gets the hook silently removed).
 
-- [ ] **Step 1: Write failing tests** — `host/LocalFlow.Core.Tests/HotkeyTests.cs`:
+- [ ] **Step 1: Write failing tests** — `host/DeadAir.Core.Tests/HotkeyTests.cs`:
 
 ```csharp
-using LocalFlow.Core.Hotkey;
+using DeadAir.Core.Hotkey;
 
-namespace LocalFlow.Core.Tests;
+namespace DeadAir.Core.Tests;
 
 public class HotkeyTests
 {
@@ -1870,10 +1870,10 @@ public class HotkeyTests
 
 - [ ] **Step 2: Run to verify failure** — Expected: compile FAIL.
 
-- [ ] **Step 3: Implement** — `host/LocalFlow.Core/Hotkey/HoldKeyStateMachine.cs`:
+- [ ] **Step 3: Implement** — `host/DeadAir.Core/Hotkey/HoldKeyStateMachine.cs`:
 
 ```csharp
-namespace LocalFlow.Core.Hotkey;
+namespace DeadAir.Core.Hotkey;
 
 public sealed class HoldKeyStateMachine(int vkCode)
 {
@@ -1891,10 +1891,10 @@ public sealed class HoldKeyStateMachine(int vkCode)
 }
 ```
 
-`host/LocalFlow.Core/Hotkey/VkMap.cs`:
+`host/DeadAir.Core/Hotkey/VkMap.cs`:
 
 ```csharp
-namespace LocalFlow.Core.Hotkey;
+namespace DeadAir.Core.Hotkey;
 
 public static class VkMap
 {
@@ -1916,12 +1916,12 @@ public static class VkMap
 }
 ```
 
-`host/LocalFlow.Core/Hotkey/KeyboardHook.cs`:
+`host/DeadAir.Core/Hotkey/KeyboardHook.cs`:
 
 ```csharp
 using System.Runtime.InteropServices;
 
-namespace LocalFlow.Core.Hotkey;
+namespace DeadAir.Core.Hotkey;
 
 public sealed class KeyboardHook : IDisposable
 {
@@ -1966,7 +1966,7 @@ public sealed class KeyboardHook : IDisposable
         _machine = machine;
         _proc = Callback;
         _thread = new Thread(RunPump) { IsBackground = true,
-            Name = "LocalFlow-KbHook" };
+            Name = "DeadAir-KbHook" };
         _thread.Start();
     }
 
@@ -2009,23 +2009,23 @@ Note: `HoldStarted`/`HoldEnded` fire **on the hook thread** — subscribers must
 ### Task 12: Orchestrator state machine
 
 **Files:**
-- Create: `host/LocalFlow.Core/Orchestrator.cs`
-- Test: `host/LocalFlow.Core.Tests/OrchestratorTests.cs`
+- Create: `host/DeadAir.Core/Orchestrator.cs`
+- Test: `host/DeadAir.Core.Tests/OrchestratorTests.cs`
 
 **Interfaces:**
 - Consumes: `ISidecarControl` (Task 8), `ITranscriptCleaner`/`CleanupResult` (Task 9), `ITextInjector` (Task 10), `SidecarEvent` (Task 8), `AppConfig` (Task 7).
 - Produces: `FlowState { Idle, Recording, Transcribing, Cleaning, Injecting }`. `IUserNotifier { void SetState(FlowState state); void Toast(string message); }` (tray implements in Task 13). `Orchestrator(ISidecarControl, ITranscriptCleaner, ITextInjector, IUserNotifier, AppConfig)` with `FlowState State`, `CleanupMode Mode` (get/set), `Task OnHotkeyDownAsync()`, `Task OnHotkeyUpAsync()`, `Task OnSidecarEventAsync(SidecarEvent e)`, `event Action<string>? LatencyLogged`.
 
-- [ ] **Step 1: Write failing tests** — `host/LocalFlow.Core.Tests/OrchestratorTests.cs`:
+- [ ] **Step 1: Write failing tests** — `host/DeadAir.Core.Tests/OrchestratorTests.cs`:
 
 ```csharp
-using LocalFlow.Core;
-using LocalFlow.Core.Cleanup;
-using LocalFlow.Core.Config;
-using LocalFlow.Core.Inject;
-using LocalFlow.Core.Sidecar;
+using DeadAir.Core;
+using DeadAir.Core.Cleanup;
+using DeadAir.Core.Config;
+using DeadAir.Core.Inject;
+using DeadAir.Core.Sidecar;
 
-namespace LocalFlow.Core.Tests;
+namespace DeadAir.Core.Tests;
 
 file sealed class FakeSidecar : ISidecarControl
 {
@@ -2147,16 +2147,16 @@ public class OrchestratorTests
 
 - [ ] **Step 2: Run to verify failure** — Expected: compile FAIL.
 
-- [ ] **Step 3: Implement** — `host/LocalFlow.Core/Orchestrator.cs`:
+- [ ] **Step 3: Implement** — `host/DeadAir.Core/Orchestrator.cs`:
 
 ```csharp
 using System.Diagnostics;
-using LocalFlow.Core.Cleanup;
-using LocalFlow.Core.Config;
-using LocalFlow.Core.Inject;
-using LocalFlow.Core.Sidecar;
+using DeadAir.Core.Cleanup;
+using DeadAir.Core.Config;
+using DeadAir.Core.Inject;
+using DeadAir.Core.Sidecar;
 
-namespace LocalFlow.Core;
+namespace DeadAir.Core;
 
 public enum FlowState { Idle, Recording, Transcribing, Cleaning, Injecting }
 
@@ -2248,8 +2248,8 @@ public sealed class Orchestrator(
 ### Task 13: WPF app — tray, settings, wiring
 
 **Files:**
-- Create: `host/LocalFlow.App/LocalFlow.App.csproj`, `host/LocalFlow.App/App.xaml`, `host/LocalFlow.App/App.xaml.cs`, `host/LocalFlow.App/WpfClipboard.cs`, `host/LocalFlow.App/TrayNotifier.cs`, `host/LocalFlow.App/SettingsWindow.xaml`, `host/LocalFlow.App/SettingsWindow.xaml.cs`
-- Modify: `host/LocalFlow.sln` (add project)
+- Create: `host/DeadAir.App/DeadAir.App.csproj`, `host/DeadAir.App/App.xaml`, `host/DeadAir.App/App.xaml.cs`, `host/DeadAir.App/WpfClipboard.cs`, `host/DeadAir.App/TrayNotifier.cs`, `host/DeadAir.App/SettingsWindow.xaml`, `host/DeadAir.App/SettingsWindow.xaml.cs`
+- Modify: `host/DeadAir.sln` (add project)
 
 **Interfaces:**
 - Consumes: everything from Tasks 7–12.
@@ -2260,23 +2260,23 @@ This task is UI-heavy; automated tests don't apply — the deliverable is verifi
 - [ ] **Step 1: Scaffold the WPF project**
 
 ```powershell
-cd "H:\DeadMind V.3\LocalFlow\host"
-dotnet new wpf -n LocalFlow.App -f net8.0
-dotnet sln add LocalFlow.App
-dotnet add LocalFlow.App reference LocalFlow.Core
-dotnet add LocalFlow.App package H.NotifyIcon.Wpf
-del LocalFlow.App\MainWindow.xaml; del LocalFlow.App\MainWindow.xaml.cs
+cd "H:\DeadMind V.3\DeadAir\host"
+dotnet new wpf -n DeadAir.App -f net8.0
+dotnet sln add DeadAir.App
+dotnet add DeadAir.App reference DeadAir.Core
+dotnet add DeadAir.App package H.NotifyIcon.Wpf
+del DeadAir.App\MainWindow.xaml; del DeadAir.App\MainWindow.xaml.cs
 ```
-In `LocalFlow.App.csproj` ensure: `<UseWPF>true</UseWPF>`, `<OutputType>WinExe</OutputType>`.
+In `DeadAir.App.csproj` ensure: `<UseWPF>true</UseWPF>`, `<OutputType>WinExe</OutputType>`.
 
-- [ ] **Step 2: Implement clipboard + notifier** — `host/LocalFlow.App/WpfClipboard.cs`:
+- [ ] **Step 2: Implement clipboard + notifier** — `host/DeadAir.App/WpfClipboard.cs`:
 
 ```csharp
 using System.Windows;
 using System.Windows.Threading;
-using LocalFlow.Core.Inject;
+using DeadAir.Core.Inject;
 
-namespace LocalFlow.App;
+namespace DeadAir.App;
 
 public sealed class WpfClipboard(Dispatcher dispatcher) : IClipboard
 {
@@ -2288,30 +2288,30 @@ public sealed class WpfClipboard(Dispatcher dispatcher) : IClipboard
 }
 ```
 
-`host/LocalFlow.App/TrayNotifier.cs`:
+`host/DeadAir.App/TrayNotifier.cs`:
 
 ```csharp
 using System.Windows.Threading;
 using H.NotifyIcon;
-using LocalFlow.Core;
+using DeadAir.Core;
 
-namespace LocalFlow.App;
+namespace DeadAir.App;
 
 public sealed class TrayNotifier(TaskbarIcon tray, Dispatcher dispatcher)
     : IUserNotifier
 {
     public void SetState(FlowState state) => dispatcher.BeginInvoke(() =>
-        tray.ToolTipText = $"LocalFlow — {state}");
+        tray.ToolTipText = $"DeadAir — {state}");
 
     public void Toast(string message) => dispatcher.BeginInvoke(() =>
-        tray.ShowNotification("LocalFlow", message));
+        tray.ShowNotification("DeadAir", message));
 }
 ```
 
-- [ ] **Step 3: App wiring** — `host/LocalFlow.App/App.xaml` (no StartupUri — tray-only):
+- [ ] **Step 3: App wiring** — `host/DeadAir.App/App.xaml` (no StartupUri — tray-only):
 
 ```xml
-<Application x:Class="LocalFlow.App.App"
+<Application x:Class="DeadAir.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnExplicitShutdown">
@@ -2319,20 +2319,20 @@ public sealed class TrayNotifier(TaskbarIcon tray, Dispatcher dispatcher)
 </Application>
 ```
 
-`host/LocalFlow.App/App.xaml.cs`:
+`host/DeadAir.App/App.xaml.cs`:
 
 ```csharp
 using System.IO;
 using System.Windows;
 using H.NotifyIcon;
-using LocalFlow.Core;
-using LocalFlow.Core.Cleanup;
-using LocalFlow.Core.Config;
-using LocalFlow.Core.Hotkey;
-using LocalFlow.Core.Inject;
-using LocalFlow.Core.Sidecar;
+using DeadAir.Core;
+using DeadAir.Core.Cleanup;
+using DeadAir.Core.Config;
+using DeadAir.Core.Hotkey;
+using DeadAir.Core.Inject;
+using DeadAir.Core.Sidecar;
 
-namespace LocalFlow.App;
+namespace DeadAir.App;
 
 public partial class App : Application
 {
@@ -2352,12 +2352,12 @@ public partial class App : Application
             ConfigStore.DefaultPath)!, "logs");
         Directory.CreateDirectory(logDir);
         _log = new StreamWriter(Path.Combine(logDir,
-            $"localflow-{DateTime.Now:yyyyMMdd}.log"), append: true)
+            $"deadair-{DateTime.Now:yyyyMMdd}.log"), append: true)
         { AutoFlush = true };
 
         _tray = new TaskbarIcon
         {
-            ToolTipText = "LocalFlow — starting…",
+            ToolTipText = "DeadAir — starting…",
             Icon = System.Drawing.SystemIcons.Application,
             ContextMenu = BuildMenu(),
         };
@@ -2432,13 +2432,13 @@ public partial class App : Application
 }
 ```
 
-- [ ] **Step 4: Settings window** — `host/LocalFlow.App/SettingsWindow.xaml`:
+- [ ] **Step 4: Settings window** — `host/DeadAir.App/SettingsWindow.xaml`:
 
 ```xml
-<Window x:Class="LocalFlow.App.SettingsWindow"
+<Window x:Class="DeadAir.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="LocalFlow Settings" Width="440" Height="520"
+        Title="DeadAir Settings" Width="440" Height="520"
         WindowStartupLocation="CenterScreen">
     <ScrollViewer Margin="12">
         <StackPanel>
@@ -2473,14 +2473,14 @@ public partial class App : Application
 </Window>
 ```
 
-`host/LocalFlow.App/SettingsWindow.xaml.cs`:
+`host/DeadAir.App/SettingsWindow.xaml.cs`:
 
 ```csharp
 using System.Windows;
 using System.Windows.Controls;
-using LocalFlow.Core.Config;
+using DeadAir.Core.Config;
 
-namespace LocalFlow.App;
+namespace DeadAir.App;
 
 public partial class SettingsWindow : Window
 {
@@ -2535,10 +2535,10 @@ Note: hotkey changes take effect after app restart in v0 (the hook is built once
 
 - [ ] **Step 5: Build + manual checklist**
 
-Run: `dotnet build` (expected: success), then `dotnet run --project LocalFlow.App` and verify:
+Run: `dotnet build` (expected: success), then `dotnet run --project DeadAir.App` and verify:
 - Tray icon appears; tooltip shows state.
 - Hold Right Ctrl → tooltip "Recording"; speak; release → text lands in Notepad.
-- Tray menu toggles Polished mode; Settings opens, saves, persists to `%APPDATA%\LocalFlow\config.json`.
+- Tray menu toggles Polished mode; Settings opens, saves, persists to `%APPDATA%\DeadAir\config.json`.
 - Exit cleanly terminates python (check Task Manager).
 
 - [ ] **Step 6: Commit** — `git add host; git commit -m "feat(app): WPF tray app, settings window, full pipeline wiring"`
@@ -2556,14 +2556,14 @@ Run: `dotnet build` (expected: success), then `dotnet run --project LocalFlow.Ap
 - [ ] **Step 1: Full-suite regression**
 
 ```powershell
-cd "H:\DeadMind V.3\LocalFlow\sidecar"; .venv\Scripts\python -m pytest tests -v
-cd "H:\DeadMind V.3\LocalFlow\host"; dotnet test
+cd "H:\DeadMind V.3\DeadAir\sidecar"; .venv\Scripts\python -m pytest tests -v
+cd "H:\DeadMind V.3\DeadAir\host"; dotnet test
 ```
 Expected: all PASS.
 
 - [ ] **Step 2: E2E smoke matrix (MANUAL — spec §9)**
 
-With Ollama running and the app started, dictate a 2–3 sentence utterance into each: **Notepad**, **VS Code**, **a browser text field**, **Windows Terminal**. For each, record pass/fail + observed latency (from the log file `%APPDATA%\LocalFlow\logs\`). Also verify:
+With Ollama running and the app started, dictate a 2–3 sentence utterance into each: **Notepad**, **VS Code**, **a browser text field**, **Windows Terminal**. For each, record pass/fail + observed latency (from the log file `%APPDATA%\DeadAir\logs\`). Also verify:
 - Faithful vs Polished produce visibly different cleanup on a rambling utterance.
 - Stop Ollama (`ollama stop qwen2.5:7b` + kill the service) → dictation still injects the **raw** transcript + "cleanup skipped" toast.
 - Set `"engine": "cpu"` in settings → still works (slower ASR).
@@ -2573,7 +2573,7 @@ With Ollama running and the app started, dictate a 2–3 sentence utterance into
 - [ ] **Step 3: Write the real README**
 
 ```markdown
-# LocalFlow
+# DeadAir
 
 Fully-local voice dictation for Windows 11 (a Wispr Flow clone). Hold **Right
 Ctrl**, speak, release — your words are transcribed on-device (whisper.cpp
@@ -2591,7 +2591,7 @@ then inserted at the cursor in any app. Nothing leaves your machine.
 1. `cd sidecar && python -m venv .venv && .venv\Scripts\pip install -r requirements.txt`
 2. `ollama pull qwen2.5:7b`
 3. `cd host && dotnet build -c Release`
-4. Run `LocalFlow.App.exe` — a tray icon appears.
+4. Run `DeadAir.App.exe` — a tray icon appears.
 
 ## Use
 - **Hold Right Ctrl** → speak → release. Cleaned text lands at your cursor.
@@ -2615,7 +2615,7 @@ Ollama does transcript cleanup. Phased roadmap in spec §10.
 git add -A; git commit -m "docs: README, E2E smoke results, phase-0 complete"
 ```
 
-- [ ] **Step 5: Refresh the durable backup** (per standing user practice): copy the repo to `C:\Users\auand\DeadMind-backup-2026-07-01\` sibling location if the user wants LocalFlow included — **ask first**, it's outside DeadMind proper.
+- [ ] **Step 5: Refresh the durable backup** (per standing user practice): copy the repo to `C:\Users\auand\DeadMind-backup-2026-07-01\` sibling location if the user wants DeadAir included — **ask first**, it's outside DeadMind proper.
 
 ---
 
