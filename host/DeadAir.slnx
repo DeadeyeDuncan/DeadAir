@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" />
+  <Project Path="DeadAir.Core/DeadAir.Core.csproj" />
+</Solution>
