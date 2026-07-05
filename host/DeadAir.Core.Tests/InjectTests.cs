@@ -17,6 +17,18 @@ file sealed class FakeStrategy(bool result) : IInjectionStrategy
     { Calls++; LastText = text; return Task.FromResult(result); }
 }
 
+file sealed class RestoreThrowingClipboard : IClipboard
+{
+    public int SetCalls;
+    public string? GetText() => "old clipboard";
+    public void SetText(string text)
+    {
+        SetCalls++;
+        if (SetCalls > 1) // first set = inject text; second = restore
+            throw new InvalidOperationException("CLIPBRD_E_CANT_OPEN");
+    }
+}
+
 public class InjectTests
 {
     [Fact]
@@ -80,5 +92,27 @@ public class InjectTests
         Assert.True(await strat.TryInjectAsync("new text"));
         Assert.Equal("new text", pasted.Single()); // pasted while ours was set
         Assert.Equal("old stuff", clip.Stored);    // then restored
+    }
+
+    [Fact]
+    public async Task ClipboardPaste_RestoreFailureAfterPaste_StillCommits()
+    {
+        var clip = new RestoreThrowingClipboard();
+        var strat = new ClipboardPasteInjector(clip, sendPaste: () => true,
+            restoreDelayMs: 0);
+        Assert.True(await strat.TryInjectAsync("new text")); // must NOT throw
+    }
+
+    [Fact]
+    public async Task Composite_NoDoubleInjection_WhenRestoreThrows()
+    {
+        var clip = new RestoreThrowingClipboard();
+        var paste = new ClipboardPasteInjector(clip, sendPaste: () => true,
+            restoreDelayMs: 0);
+        var typer = new FakeStrategy(true); // fallback strategy
+        var inj = new CompositeInjector(
+            new IInjectionStrategy[] { paste, typer }, clip);
+        Assert.True(await inj.InjectAsync("hello"));
+        Assert.Equal(0, typer.Calls); // fallback must never fire
     }
 }

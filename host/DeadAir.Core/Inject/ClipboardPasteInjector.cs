@@ -10,8 +10,18 @@ public sealed class ClipboardPasteInjector(
         clipboard.SetText(text);
         await Task.Delay(50); // let the clipboard settle before pasting
         if (!sendPaste()) return false;
-        await Task.Delay(restoreDelayMs);
-        if (previous is not null) clipboard.SetText(previous);
+        // COMMITTED: the paste has fired. Nothing below may fail the strategy,
+        // or the composite would re-inject via SendInput (double-typed text).
+        try
+        {
+            await Task.Delay(restoreDelayMs);
+            if (previous is not null) clipboard.SetText(previous);
+        }
+        catch
+        {
+            // Restore failure loses the user's old clipboard — tolerable;
+            // double-injection is not.
+        }
         return true;
     }
 }
