@@ -24,4 +24,8 @@
     <ProjectReference Include="..\DeadAir.Core\DeadAir.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
