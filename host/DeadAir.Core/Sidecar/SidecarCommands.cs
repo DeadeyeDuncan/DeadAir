@@ -22,12 +22,19 @@ public sealed record ConfigCommand
         CpuModel = c.Asr.CpuModel,
         Mic = c.Mic,
         Dictionary = c.Dictionary,
-        GpuServerExe = Path.GetFullPath(c.Asr.GpuServerExe,
-            AppContext.BaseDirectory),
-        GpuModelPath = Path.GetFullPath(c.Asr.GpuModelPath,
-            AppContext.BaseDirectory),
+        GpuServerExe = SidecarPathResolver.ResolveAsset(AppContext.BaseDirectory,
+            c.Asr.GpuServerExe, ProbeRelative(c.Asr.GpuServerExe)),
+        GpuModelPath = SidecarPathResolver.ResolveAsset(AppContext.BaseDirectory,
+            c.Asr.GpuModelPath, ProbeRelative(c.Asr.GpuModelPath)),
         GpuPort = c.Asr.GpuPort,
     };
+
+    // Configured defaults are "..\..\tools\whisper\whisper-server.exe" style — the walk-up
+    // probe is the same path with leading "..\" segments stripped (i.e. relative to the
+    // repo root rather than to whatever depth the exe happens to live at).
+    private static string ProbeRelative(string configured) =>
+        configured.Replace(".." + Path.DirectorySeparatorChar, "")
+                  .Replace(".." + Path.AltDirectorySeparatorChar, "");
 }
 
 public sealed record SimpleCommand([property: JsonPropertyName("cmd")] string Cmd);

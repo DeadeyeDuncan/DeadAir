@@ -71,6 +71,12 @@ public partial class App : Application
                 });
                 return;
             }
+            // Track the active engine for tray-tooltip visibility (spec C1) — record only,
+            // still forward to the orchestrator below exactly as before.
+            if (ev.Event is "ready" && ev.Engine is { } engine)
+                Dispatcher.BeginInvoke(() => notifier.EngineLabel = engine);
+            else if (ev.Event is "degraded")
+                Dispatcher.BeginInvoke(() => notifier.EngineLabel = "cpu");
             FireAndForget(() => _orchestrator.OnSidecarEventAsync(ev),
                 "sidecar-event");
         };
