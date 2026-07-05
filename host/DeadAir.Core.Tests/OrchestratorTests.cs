@@ -1,3 +1,4 @@
+using System.Linq;
 using DeadAir.Core;
 using DeadAir.Core.Cleanup;
 using DeadAir.Core.Config;
@@ -120,5 +121,42 @@ public class OrchestratorTests
         await o.OnHotkeyDownAsync();
         await o.OnHotkeyDownAsync(); // second press while recording
         Assert.Equal(1, sc.Starts);
+    }
+
+    [Fact]
+    public async Task StaleFinal_WhileIdle_Ignored()
+    {
+        var inj = new FakeInjector(ok: true);
+        var o = Make(new FakeSidecar(),
+            new FakeCleaner(new CleanupResult("x", false, null)), inj,
+            new FakeNotifier());
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "ghost" });
+        Assert.Null(inj.Injected);
+        Assert.Equal(FlowState.Idle, o.State);
+    }
+
+    [Fact]
+    public async Task Degraded_ToastsOnlyOnce()
+    {
+        var n = new FakeNotifier();
+        var o = Make(new FakeSidecar(),
+            new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), n);
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "degraded", Reason = "no vulkan" });
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "degraded", Reason = "no vulkan" });
+        Assert.Single(n.Toasts.Where(t => t.Contains("CPU")));
+    }
+
+    [Fact]
+    public async Task ErrorEvent_Toasts_AndReturnsToIdle()
+    {
+        var n = new FakeNotifier();
+        var o = Make(new FakeSidecar(),
+            new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), n);
+        await o.OnHotkeyDownAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "error", Where = "asr", Message = "boom" });
+        Assert.Contains(n.Toasts, t => t.Contains("asr") && t.Contains("boom"));
+        Assert.Equal(FlowState.Idle, o.State);
     }
 }

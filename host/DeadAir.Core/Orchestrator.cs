@@ -19,6 +19,7 @@ public sealed class Orchestrator(
     ITextInjector injector, IUserNotifier notifier, AppConfig config)
 {
     private readonly Stopwatch _clock = new();
+    private readonly object _gate = new();
     private bool _degradedToastShown;
 
     public FlowState State { get; private set; } = FlowState.Idle;
@@ -30,16 +31,22 @@ public sealed class Orchestrator(
 
     public async Task OnHotkeyDownAsync()
     {
-        if (State != FlowState.Idle) return;
-        SetState(FlowState.Recording);
+        lock (_gate)
+        {
+            if (State != FlowState.Idle) return;
+            SetState(FlowState.Recording);
+        }
         await sidecar.StartUtteranceAsync();
     }
 
     public async Task OnHotkeyUpAsync()
     {
-        if (State != FlowState.Recording) return;
-        SetState(FlowState.Transcribing);
-        _clock.Restart();
+        lock (_gate)
+        {
+            if (State != FlowState.Recording) return;
+            SetState(FlowState.Transcribing);
+            _clock.Restart();
+        }
         await sidecar.StopUtteranceAsync();
     }
 
@@ -48,7 +55,13 @@ public sealed class Orchestrator(
         switch (e.Event)
         {
             case "final":
-                await HandleFinalAsync(e);
+                bool proceed;
+                lock (_gate)
+                {
+                    proceed = State == FlowState.Transcribing;
+                    if (proceed) SetState(FlowState.Cleaning);
+                }
+                if (proceed) await HandleFinalAsync(e);
                 break;
             case "empty":
                 SetState(FlowState.Idle);
@@ -70,7 +83,6 @@ public sealed class Orchestrator(
     private async Task HandleFinalAsync(SidecarEvent e)
     {
         var asrMs = _clock.ElapsedMilliseconds;
-        SetState(FlowState.Cleaning);
         var result = await cleaner.CleanAsync(e.Text ?? "", Mode);
         var cleanMs = _clock.ElapsedMilliseconds - asrMs;
         if (result.Skipped && result.Reason != "below skip guard")
