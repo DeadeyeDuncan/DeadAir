@@ -65,8 +65,13 @@ public sealed class OllamaClient : ITranscriptCleaner
                 ? new CleanupResult(transcript, true, "empty LLM output")
                 : new CleanupResult(text, false, null);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw; // caller cancelled — propagate; do not convert to a Skipped result
+        }
         catch (Exception ex)
         {
+            // Timeout (TaskCanceledException) and HTTP failures still return raw transcript—words never lost
             return new CleanupResult(transcript, true, ex.Message);
         }
     }
