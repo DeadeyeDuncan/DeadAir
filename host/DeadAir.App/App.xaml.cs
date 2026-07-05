@@ -149,7 +149,16 @@ public partial class App : Application
 
     private async void OnSettingsSaved()
     {
-        ConfigStore.Save(_config);
-        await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
+        try
+        {
+            ConfigStore.Save(_config);
+            _orchestrator.Mode = _config.Cleanup.Mode; // apply live, no restart needed
+            await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
+        }
+        catch (Exception ex)
+        {
+            _log.WriteLine($"{DateTime.Now:HH:mm:ss} ERROR settings-saved: {ex}");
+            _tray.ShowNotification("DeadAir", $"Couldn't apply settings: {ex.Message}");
+        }
     }
 }
