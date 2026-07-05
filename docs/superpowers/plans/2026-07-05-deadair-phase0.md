@@ -883,7 +883,7 @@ if __name__ == "__main__":
 ### Task 7: Host solution + config store
 
 **Files:**
-- Create: `host/DeadAir.sln`, `host/DeadAir.Core/DeadAir.Core.csproj`, `host/DeadAir.Core/Config/AppConfig.cs`, `host/DeadAir.Core/Config/ConfigStore.cs`, `host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj`
+- Create: `host/DeadAir.slnx`, `host/DeadAir.Core/DeadAir.Core.csproj`, `host/DeadAir.Core/Config/AppConfig.cs`, `host/DeadAir.Core/Config/ConfigStore.cs`, `host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj`
 - Test: `host/DeadAir.Core.Tests/ConfigStoreTests.cs`
 
 **Interfaces:**
@@ -2249,7 +2249,7 @@ public sealed class Orchestrator(
 
 **Files:**
 - Create: `host/DeadAir.App/DeadAir.App.csproj`, `host/DeadAir.App/App.xaml`, `host/DeadAir.App/App.xaml.cs`, `host/DeadAir.App/WpfClipboard.cs`, `host/DeadAir.App/TrayNotifier.cs`, `host/DeadAir.App/SettingsWindow.xaml`, `host/DeadAir.App/SettingsWindow.xaml.cs`
-- Modify: `host/DeadAir.sln` (add project)
+- Modify: `host/DeadAir.slnx` (add project)
 
 **Interfaces:**
 - Consumes: everything from Tasks 7–12.
