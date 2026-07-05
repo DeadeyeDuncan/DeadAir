@@ -39,7 +39,12 @@ public static class NativeInput
     private struct INPUT { public int type; public InputUnion U; }
 
     [StructLayout(LayoutKind.Explicit)]
-    private struct InputUnion { [FieldOffset(0)] public KEYBDINPUT ki; }
+    private struct InputUnion
+    {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public HARDWAREINPUT hi;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct KEYBDINPUT
@@ -51,8 +56,31 @@ public static class NativeInput
         public nint dwExtraInfo;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public nint dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HARDWAREINPUT
+    {
+        public uint uMsg;
+        public ushort wParamL;
+        public ushort wParamH;
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint n, INPUT[] inputs, int size);
+
+    /// <summary>Marshalled size of the Win32 INPUT struct — must be 40 on x64.
+    /// SendInput validates cbSize and silently no-ops (returns 0) on mismatch.</summary>
+    public static int InputStructSize => Marshal.SizeOf<INPUT>();
 
     private static INPUT Key(ushort vk, ushort scan, uint flags) => new()
     { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT

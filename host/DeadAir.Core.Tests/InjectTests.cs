@@ -62,6 +62,14 @@ public class InjectTests
     }
 
     [Fact]
+    public void InputStruct_MarshalsToWin32Size()
+    {
+        // Win32 x64: INPUT = 4(type) + 4(pad) + 32(union incl. MOUSEINPUT) = 40.
+        // A wrong size makes SendInput reject every call with ERROR_INVALID_PARAMETER.
+        Assert.Equal(40, NativeInput.InputStructSize);
+    }
+
+    [Fact]
     public async Task ClipboardPaste_RestoresPriorClipboardOnSuccess()
     {
         var clip = new FakeClipboard { Stored = "old stuff" };
