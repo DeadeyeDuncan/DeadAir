@@ -30,12 +30,13 @@ public sealed class SidecarManager : ISidecarControl, IDisposable
     public async Task LaunchAsync()
     {
         var s = _config.Sidecar;
+        var (python, workingDir) = SidecarPathResolver.Resolve(
+            AppContext.BaseDirectory, s.Python, s.WorkingDir);
         _proc = Process.Start(new ProcessStartInfo
         {
-            FileName = s.Python,
+            FileName = python,
             Arguments = s.Args,
-            WorkingDirectory = Path.GetFullPath(s.WorkingDir,
-                AppContext.BaseDirectory),
+            WorkingDirectory = workingDir,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
