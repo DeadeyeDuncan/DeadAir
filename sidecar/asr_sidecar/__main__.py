@@ -8,6 +8,7 @@ from .capture import MicCapture
 from .config import SidecarConfig
 from .engines import create_engine
 from .ipc import emit, read_commands
+from .levels import LevelEmitter
 from .vad import extract_speech
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
@@ -49,6 +50,7 @@ def main() -> None:
                 if cap is not None:
                     cap.cancel()
                 cap = MicCapture(cfg.mic)
+                cap.on_block = LevelEmitter(emit).on_block
                 emit({"event": "ready", "engine": engine.name,
                       "model": cfg.model if engine.name == "gpu"
                       else cfg.cpu_model})

@@ -12,11 +12,18 @@ class MicCapture:
         self._stream = None
         self._recording = False
         self._lock = threading.Lock()
+        self.on_block = None  # optional per-block hook (level events); never breaks capture
 
     def _on_frames(self, mono: np.ndarray) -> None:
         with self._lock:
-            if self._recording:
+            recording = self._recording
+            if recording:
                 self._frames.append(mono)
+        if recording and self.on_block is not None:
+            try:
+                self.on_block(mono)
+            except Exception:
+                pass  # level emission must never break capture
 
     def _callback(self, indata, frames, time_info, status):
         self._on_frames(indata[:, 0].copy())
