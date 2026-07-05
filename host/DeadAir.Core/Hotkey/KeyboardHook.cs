@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace DeadAir.Core.Hotkey;
 
@@ -37,8 +38,10 @@ public sealed class KeyboardHook : IDisposable
     private readonly HoldKeyStateMachine _machine;
     private readonly HookProc _proc; // rooted: prevents GC of the delegate
     private readonly Thread _thread;
+    private readonly ManualResetEventSlim _pumpReady = new(false);
     private nint _hook;
     private uint _threadId;
+    private bool _disposed;
 
     public KeyboardHook(HoldKeyStateMachine machine)
     {
@@ -53,6 +56,7 @@ public sealed class KeyboardHook : IDisposable
     {
         _threadId = GetCurrentThreadId();
         _hook = SetWindowsHookExW(WH_KEYBOARD_LL, _proc, 0, 0);
+        _pumpReady.Set();
         // Keep the callback trivial and this pump responsive: Windows silently
         // removes hooks whose callbacks time out (spec §D6).
         while (GetMessageW(out _, 0, 0, 0) > 0) { }
@@ -67,12 +71,29 @@ public sealed class KeyboardHook : IDisposable
             var isDown = wParam is WM_KEYDOWN or WM_SYSKEYDOWN;
             var isUp = wParam is WM_KEYUP or WM_SYSKEYUP;
             if (isDown || isUp)
-                _machine.OnKeyEvent((int)data.vkCode, isDown,
-                    (data.flags & LLKHF_INJECTED) != 0);
+            {
+                try
+                {
+                    _machine.OnKeyEvent((int)data.vkCode, isDown,
+                        (data.flags & LLKHF_INJECTED) != 0);
+                }
+                catch
+                {
+                    // Subscribers must not break the global hook chain. Failures are
+                    // intentionally swallowed here — if a subscriber throws, we still
+                    // pass the event to the next hook via CallNextHookEx below.
+                }
+            }
         }
         return CallNextHookEx(_hook, nCode, wParam, lParam);
     }
 
-    public void Dispose() =>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _pumpReady.Wait(TimeSpan.FromSeconds(2));
         PostThreadMessageW(_threadId, WM_QUIT, 0, 0);
+        _pumpReady.Dispose();
+    }
 }
