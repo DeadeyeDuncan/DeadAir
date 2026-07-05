@@ -1,0 +1,16 @@
+# build output
+host/**/bin/
+host/**/obj/
+*.user
+# python
+sidecar/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# large local assets
+models/*
+!models/.gitkeep
+tools/*
+!tools/.gitkeep
+# logs
+*.log
