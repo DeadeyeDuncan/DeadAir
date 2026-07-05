@@ -18,6 +18,7 @@ public partial class App : Application
     private KeyboardHook _hook = null!;
     private TaskbarIcon _tray = null!;
     private StreamWriter _log = null!;
+    private RecordingIndicatorWindow _indicator = null!;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -38,7 +39,12 @@ public partial class App : Application
             ContextMenu = BuildMenu(),
         };
         _tray.ForceCreate();
-        var notifier = new TrayNotifier(_tray, Dispatcher);
+        _indicator = new RecordingIndicatorWindow();
+        var notifier = new TrayNotifier(_tray, Dispatcher, state =>
+        {
+            if (state == FlowState.Recording) _indicator.ShowIndicator();
+            else _indicator.HideIndicator();
+        });
 
         var clipboard = new WpfClipboard(Dispatcher);
         var injector = new CompositeInjector(new IInjectionStrategy[]
@@ -55,7 +61,18 @@ public partial class App : Application
         _orchestrator.LatencyLogged += line =>
             _log.WriteLine($"{DateTime.Now:HH:mm:ss} {line}");
         _sidecar.EventReceived += ev =>
-            FireAndForget(() => _orchestrator.OnSidecarEventAsync(ev), "sidecar-event");
+        {
+            if (ev.Event == "level")
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try { _indicator.Push(ev.Rms ?? 0); } catch { }
+                });
+                return;
+            }
+            FireAndForget(() => _orchestrator.OnSidecarEventAsync(ev),
+                "sidecar-event");
+        };
         _sidecar.Faulted += () =>
             notifier.Toast("Sidecar keeps crashing — check logs.");
 
@@ -108,7 +125,12 @@ public partial class App : Application
                 await _sidecar.ShutdownAsync();
             }
             catch (Exception ex) { _log.WriteLine($"{DateTime.Now:HH:mm:ss} ERROR exit: {ex}"); }
-            finally { _log.Dispose(); Shutdown(); }
+            finally
+            {
+                try { _indicator.Close(); } catch { }
+                _log.Dispose();
+                Shutdown();
+            }
         };
 
         menu.Items.Add(mode);
