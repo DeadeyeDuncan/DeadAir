@@ -24,6 +24,12 @@ def test_transcribe_posts_wav_and_parses_json():
     assert text == "hello world"
 
 
+def test_close_closes_http_client():
+    eng = GpuEngine(server_exe="", model_path="", spawn=False)
+    eng.close()
+    assert eng._client.is_closed
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(not os.environ.get("LOCALFLOW_WHISPER_SERVER"),
                     reason="set LOCALFLOW_WHISPER_SERVER + LOCALFLOW_WHISPER_MODEL")
