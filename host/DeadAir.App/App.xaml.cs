@@ -31,6 +31,7 @@ public partial class App : Application
         _log = new StreamWriter(Path.Combine(logDir,
             $"deadair-{DateTime.Now:yyyyMMdd}.log"), append: true)
         { AutoFlush = true };
+        _log.WriteLine($"{DateTime.Now:HH:mm:ss} app started, log={((FileStream)_log.BaseStream).Name}");
 
         _tray = new TaskbarIcon
         {
