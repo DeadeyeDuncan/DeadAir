@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using System.Windows;
 using H.NotifyIcon;
 using DeadAir.Core;
@@ -19,18 +20,36 @@ public partial class App : Application
     private TaskbarIcon _tray = null!;
     private StreamWriter _log = null!;
     private RecordingIndicatorWindow _indicator = null!;
+    private Mutex _singleInstance = null!;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Single-instance guard. DeadAir lives in the tray, so a second launch
+        // is almost always accidental — and would collide on the day's log file
+        // and hard-crash (IOException). Detect the running instance and bow out.
+        _singleInstance = new Mutex(initiallyOwned: true,
+            @"Local\DeadAir.SingleInstance", out bool isFirstInstance);
+        if (!isFirstInstance)
+        {
+            MessageBox.Show("DeadAir is already running — see the system tray.",
+                "DeadAir", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
         _config = ConfigStore.Load();
 
         var logDir = Path.Combine(Path.GetDirectoryName(
             ConfigStore.DefaultPath)!, "logs");
         Directory.CreateDirectory(logDir);
-        _log = new StreamWriter(Path.Combine(logDir,
-            $"deadair-{DateTime.Now:yyyyMMdd}.log"), append: true)
-        { AutoFlush = true };
+        // FileShare.ReadWrite so a lingering/zombie handle can never turn a log
+        // open into a launch-killing crash (defense-in-depth behind the mutex).
+        var logStream = new FileStream(Path.Combine(logDir,
+            $"deadair-{DateTime.Now:yyyyMMdd}.log"),
+            FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        _log = new StreamWriter(logStream) { AutoFlush = true };
         _log.WriteLine($"{DateTime.Now:HH:mm:ss} app started, log={((FileStream)_log.BaseStream).Name}");
 
         _tray = new TaskbarIcon
@@ -87,7 +106,12 @@ public partial class App : Application
                 "sidecar-event");
         };
         _sidecar.Faulted += () =>
+        {
+            // Actually put the cause IN the log the toast tells the user to check.
+            _log.WriteLine($"{DateTime.Now:HH:mm:ss} SIDECAR FAULTED — recent stderr:");
+            _log.WriteLine(_sidecar.RecentStderr);
             notifier.Toast("Sidecar keeps crashing — check logs.");
+        };
 
         var machine = new HoldKeyStateMachine(
             VkMap.Resolve(_config.Hotkey.Key));
@@ -142,6 +166,8 @@ public partial class App : Application
             {
                 try { _indicator.Close(); } catch { }
                 _log.Dispose();
+                try { _singleInstance.ReleaseMutex(); } catch { }
+                _singleInstance.Dispose();
                 Shutdown();
             }
         };

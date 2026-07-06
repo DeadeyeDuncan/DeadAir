@@ -7,6 +7,16 @@ public class HotkeyTests
     private const int VK = 0xA3; // RControl
 
     [Fact]
+    public void MsgStruct_MarshalsToWin32Size()
+    {
+        // Win32 x64: MSG = hwnd(8) + message(4+4pad) + wParam(8) + lParam(8)
+        //          + time(4) + POINT(8) padded to 48. GetMessage writes the whole
+        //          struct; an undersized buffer corrupts the stack → the pump
+        //          crashes with AccessViolationException in RunPump.
+        Assert.Equal(48, KeyboardHook.MessageStructSize);
+    }
+
+    [Fact]
     public void DownFiresOnce_AutoRepeatIgnored_UpFires()
     {
         var sm = new HoldKeyStateMachine(VK);

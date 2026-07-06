@@ -16,6 +16,24 @@ public sealed class KeyboardHook : IDisposable
     private struct KBDLLHOOKSTRUCT
     { public uint vkCode, scanCode, flags, time; public nint dwExtraInfo; }
 
+    // Win32 MSG. GetMessage writes the ENTIRE struct (48 bytes on x64) into the
+    // caller's buffer — passing a bare `out nint` (8 bytes) overflows the stack
+    // by 40 bytes and corrupts memory → AccessViolationException in the pump.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSG
+    {
+        public nint hwnd;
+        public uint message;
+        public nint wParam;
+        public nint lParam;
+        public uint time;
+        public int ptX;
+        public int ptY;
+    }
+
+    /// Size-pinned in a test: a wrong MSG size re-introduces the pump crash.
+    public static int MessageStructSize => Marshal.SizeOf<MSG>();
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern nint SetWindowsHookExW(int id, HookProc proc,
         nint hMod, uint threadId);
@@ -25,7 +43,7 @@ public sealed class KeyboardHook : IDisposable
     private static extern nint CallNextHookEx(nint hhk, int nCode,
         nint wParam, nint lParam);
     [DllImport("user32.dll")]
-    private static extern int GetMessageW(out nint msg, nint hWnd,
+    private static extern int GetMessageW(out MSG msg, nint hWnd,
         uint min, uint max);
     [DllImport("user32.dll")]
     private static extern bool PostThreadMessageW(uint threadId, uint msg,
