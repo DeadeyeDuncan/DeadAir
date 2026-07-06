@@ -14,6 +14,7 @@ public class ConfigStoreTests
         Assert.Equal(50, cfg.Cleanup.SkipGuardChars);
         Assert.Equal("qwen2.5:7b", cfg.Ollama.Model);
         Assert.Equal(8192, cfg.Ollama.NumCtx);
+        Assert.Equal("30m", cfg.Ollama.KeepAlive);
     }
 
     [Fact]

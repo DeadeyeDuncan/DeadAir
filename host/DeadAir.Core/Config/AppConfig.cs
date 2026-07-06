@@ -42,6 +42,7 @@ public sealed class OllamaConfig
     public int NumCtx { get; set; } = 8192;
     public double Temperature { get; set; } = 0.1;
     public int TimeoutSeconds { get; set; } = 20;
+    public string KeepAlive { get; set; } = "30m";
 }
 
 public sealed class CleanupConfig

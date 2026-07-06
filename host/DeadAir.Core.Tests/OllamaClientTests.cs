@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using DeadAir.Core.Cleanup;
 using DeadAir.Core.Config;
 
@@ -21,6 +22,21 @@ file sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> resp
         {
             return Task.FromException<HttpResponseMessage>(ex);
         }
+    }
+}
+
+file sealed class CapturingHandler(HttpResponseMessage response) : HttpMessageHandler
+{
+    public HttpRequestMessage? LastRequest;
+    public string? LastBody;
+
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken ct)
+    {
+        LastRequest = request;
+        LastBody = request.Content is null
+            ? null : await request.Content.ReadAsStringAsync(ct);
+        return response;
     }
 }
 
@@ -154,5 +170,55 @@ public class OllamaClientTests
         Assert.Equal(longText, r.Text);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10),
             $"expected the stalled body read to be bounded by the ~1s timeout, took {sw.Elapsed}");
+    }
+
+    [Fact]
+    public async Task CleanAsync_PostsExpectedBodyShape()
+    {
+        var ndjson = "{\"response\":\"ok\",\"done\":true}\n";
+        var handler = new CapturingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent(ndjson, Encoding.UTF8) });
+        var cfg = Cfg();
+        var client = new OllamaClient(cfg, handler);
+        var longText = new string('x', 60);
+        await client.CleanAsync(longText, CleanupMode.Faithful);
+
+        Assert.EndsWith("/api/generate",
+            handler.LastRequest!.RequestUri!.AbsolutePath);
+        using var doc = JsonDocument.Parse(handler.LastBody!);
+        var root = doc.RootElement;
+        Assert.Equal(cfg.Ollama.Model, root.GetProperty("model").GetString());
+        Assert.False(string.IsNullOrEmpty(root.GetProperty("system").GetString()));
+        Assert.Equal(longText, root.GetProperty("prompt").GetString());
+        Assert.True(root.GetProperty("stream").GetBoolean());
+        Assert.Equal(0.1, root.GetProperty("options")
+            .GetProperty("temperature").GetDouble(), 3);
+        Assert.Equal(8192, root.GetProperty("options")
+            .GetProperty("num_ctx").GetInt32());
+        Assert.Equal("30m", root.GetProperty("keep_alive").GetString());
+    }
+
+    [Fact]
+    public async Task WarmUp_PostsEmptyPromptWithKeepAlive_ReturnsTrue()
+    {
+        var handler = new CapturingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent("{}", Encoding.UTF8) });
+        var client = new OllamaClient(Cfg(), handler);
+
+        Assert.True(await client.WarmUpAsync());
+        using var doc = JsonDocument.Parse(handler.LastBody!);
+        Assert.Equal("", doc.RootElement.GetProperty("prompt").GetString());
+        Assert.False(doc.RootElement.GetProperty("stream").GetBoolean());
+        Assert.Equal("30m", doc.RootElement.GetProperty("keep_alive").GetString());
+        Assert.EndsWith("/api/generate",
+            handler.LastRequest!.RequestUri!.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task WarmUp_ConnectionFailure_ReturnsFalseWithoutThrowing()
+    {
+        var handler = new StubHandler(_ => throw new HttpRequestException("down"));
+        var client = new OllamaClient(Cfg(), handler);
+        Assert.False(await client.WarmUpAsync());
     }
 }

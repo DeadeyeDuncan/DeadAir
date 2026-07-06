@@ -37,6 +37,7 @@ public sealed class OllamaClient : ITranscriptCleaner
                 system = PromptBuilder.Build(mode, _cfg),
                 prompt = transcript,
                 stream = true,
+                keep_alive = _cfg.Ollama.KeepAlive,
                 options = new
                 {
                     temperature = _cfg.Ollama.Temperature,
@@ -83,6 +84,32 @@ public sealed class OllamaClient : ITranscriptCleaner
         {
             // Timeout (TaskCanceledException) and HTTP failures still return raw transcript—words never lost
             return new CleanupResult(transcript, true, ex.Message);
+        }
+    }
+
+    /// <summary>Preload the model (Ollama's empty-prompt idiom) so the first
+    /// dictation doesn't pay the cold VRAM load. Opportunistic: returns false
+    /// on any failure, never throws.</summary>
+    public async Task<bool> WarmUpAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var body = JsonSerializer.Serialize(new
+            {
+                model = _cfg.Ollama.Model,
+                prompt = "",
+                stream = false,
+                keep_alive = _cfg.Ollama.KeepAlive,
+            });
+            using var req = new HttpRequestMessage(HttpMethod.Post,
+                _cfg.Ollama.Url.TrimEnd('/') + "/api/generate")
+            { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+            using var resp = await _http.SendAsync(req, ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

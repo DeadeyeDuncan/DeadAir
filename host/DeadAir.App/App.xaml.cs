@@ -57,6 +57,12 @@ public partial class App : Application
 
         _sidecar = new SidecarManager(_config);
         var cleaner = new OllamaClient(_config);
+        _ = Task.Run(async () =>
+        {
+            var ok = await cleaner.WarmUpAsync();
+            _log.WriteLine($"{DateTime.Now:HH:mm:ss} ollama warm-up " +
+                (ok ? "ok" : "failed (will load on first use)"));
+        });
         _orchestrator = new Orchestrator(_sidecar, cleaner, injector,
             notifier, _config);
         _orchestrator.LatencyLogged += line =>
