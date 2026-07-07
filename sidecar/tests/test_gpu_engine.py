@@ -30,6 +30,57 @@ def test_close_closes_http_client():
     assert eng._client.is_closed
 
 
+def test_transcribe_respawns_dead_server_then_succeeds(monkeypatch):
+    # The whisper-server crashes on inference (WinError 10061 on connect).
+    # A managed engine must respawn it once and retry, not wedge forever.
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectError("[WinError 10061] actively refused")
+        return httpx.Response(200, json={"text": " recovered "})
+
+    eng = GpuEngine(server_exe="", model_path="", spawn=False,
+                    transport=httpx.MockTransport(handler))
+    eng._manage_proc = True  # pretend we own the server process
+    respawns = {"n": 0}
+    monkeypatch.setattr(eng, "_respawn",
+                        lambda: respawns.__setitem__("n", respawns["n"] + 1))
+
+    text = eng.transcribe(np.zeros(16000, dtype=np.float32))
+
+    assert text == "recovered"
+    assert respawns["n"] == 1  # crashed server respawned exactly once
+
+
+def test_transcribe_raises_with_server_log_when_recovery_fails(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("[WinError 10061] actively refused")
+
+    eng = GpuEngine(server_exe="", model_path="", spawn=False,
+                    transport=httpx.MockTransport(handler))
+    eng._manage_proc = True
+    eng._server_log.append("ggml_vulkan: Device lost")  # captured crash output
+    monkeypatch.setattr(eng, "_respawn", lambda: None)
+
+    with pytest.raises(GpuEngineError) as ei:
+        eng.transcribe(np.zeros(16000, dtype=np.float32))
+
+    assert "Device lost" in str(ei.value)  # crash reason surfaced, not hidden
+
+
+def test_transcribe_no_respawn_when_process_not_managed():
+    # spawn=False means we didn't launch the server; we cannot recover it.
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("[WinError 10061] actively refused")
+
+    eng = GpuEngine(server_exe="", model_path="", spawn=False,
+                    transport=httpx.MockTransport(handler))
+    with pytest.raises(GpuEngineError):
+        eng.transcribe(np.zeros(16000, dtype=np.float32))
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(not os.environ.get("LOCALFLOW_WHISPER_SERVER"),
                     reason="set LOCALFLOW_WHISPER_SERVER + LOCALFLOW_WHISPER_MODEL")
