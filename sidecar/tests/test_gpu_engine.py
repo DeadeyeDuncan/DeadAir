@@ -81,6 +81,29 @@ def test_transcribe_no_respawn_when_process_not_managed():
         eng.transcribe(np.zeros(16000, dtype=np.float32))
 
 
+def test_try_partial_returns_text_on_success():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"text": " interim words "})
+
+    eng = GpuEngine(server_exe="", model_path="", spawn=False,
+                    transport=httpx.MockTransport(handler))
+    assert eng.try_partial(np.zeros(16000, dtype=np.float32)) == "interim words"
+
+
+def test_try_partial_swallows_failure_without_respawn(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("[WinError 10061] actively refused")
+
+    eng = GpuEngine(server_exe="", model_path="", spawn=False,
+                    transport=httpx.MockTransport(handler))
+    eng._manage_proc = True
+    called = {"respawn": 0}
+    monkeypatch.setattr(eng, "_respawn",
+                        lambda: called.__setitem__("respawn", 1))
+    assert eng.try_partial(np.zeros(16000, dtype=np.float32)) is None
+    assert called["respawn"] == 0  # partials must NEVER respawn the server
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(not os.environ.get("LOCALFLOW_WHISPER_SERVER"),
                     reason="set LOCALFLOW_WHISPER_SERVER + LOCALFLOW_WHISPER_MODEL")

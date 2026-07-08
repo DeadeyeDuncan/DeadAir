@@ -132,6 +132,15 @@ class GpuEngine(AsrEngine):
                     "whisper-server crashed and could not recover: "
                     f"{e2}\n{self.server_log_tail()}") from e2
 
+    def try_partial(self, audio: np.ndarray, initial_prompt: str = "") -> str | None:
+        """Best-effort interim decode for the live pill. Returns None on any
+        failure — never respawns, never raises — so a crashy partial can't
+        wedge or delay the authoritative final decode (which keeps self-heal)."""
+        try:
+            return self._post(audio, initial_prompt)
+        except Exception:
+            return None
+
     def close(self) -> None:
         self._terminate_proc()
         self._client.close()
