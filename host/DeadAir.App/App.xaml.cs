@@ -88,11 +88,20 @@ public partial class App : Application
             _log.WriteLine($"{DateTime.Now:HH:mm:ss} {line}");
         _sidecar.EventReceived += ev =>
         {
-            if (ev.Event == "level")
+            if (ev.Event == "waveform")
             {
                 Dispatcher.BeginInvoke(() =>
                 {
-                    try { _indicator.Push(ev.Rms ?? 0); } catch { }
+                    try { _indicator.PushWaveform(ev.Samples ?? Array.Empty<double>()); }
+                    catch { }
+                });
+                return;
+            }
+            if (ev.Event == "partial")
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try { _indicator.SetPartial(ev.Text ?? ""); } catch { }
                 });
                 return;
             }

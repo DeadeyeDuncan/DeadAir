@@ -14,6 +14,10 @@ public sealed record ConfigCommand
     [JsonPropertyName("gpu_server_exe")] public string GpuServerExe { get; init; } = "";
     [JsonPropertyName("gpu_model_path")] public string GpuModelPath { get; init; } = "";
     [JsonPropertyName("gpu_port")] public int GpuPort { get; init; } = 8910;
+    [JsonPropertyName("partials")] public bool Partials { get; init; } = true;
+    [JsonPropertyName("partial_interval_ms")] public int PartialIntervalMs { get; init; } = 600;
+    [JsonPropertyName("partial_min_ms")] public int PartialMinMs { get; init; } = 700;
+    [JsonPropertyName("partial_window_s")] public int PartialWindowSeconds { get; init; } = 30;
 
     public static ConfigCommand From(AppConfig c) => new()
     {
@@ -27,6 +31,10 @@ public sealed record ConfigCommand
         GpuModelPath = SidecarPathResolver.ResolveAsset(AppContext.BaseDirectory,
             c.Asr.GpuModelPath, ProbeRelative(c.Asr.GpuModelPath)),
         GpuPort = c.Asr.GpuPort,
+        Partials = c.Asr.Partials,
+        PartialIntervalMs = c.Asr.PartialIntervalMs,
+        PartialMinMs = c.Asr.PartialMinMs,
+        PartialWindowSeconds = c.Asr.PartialWindowSeconds,
     };
 
     // Configured defaults are "..\..\tools\whisper\whisper-server.exe" style — the walk-up

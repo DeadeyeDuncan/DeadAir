@@ -33,6 +33,10 @@ public sealed class AsrConfig
     public string GpuServerExe { get; set; } = @"..\..\tools\whisper\whisper-server.exe";
     public string GpuModelPath { get; set; } = @"..\..\models\ggml-large-v3-turbo.bin";
     public int GpuPort { get; set; } = 8910;
+    public bool Partials { get; set; } = true;
+    public int PartialIntervalMs { get; set; } = 600;
+    public int PartialMinMs { get; set; } = 700;
+    public int PartialWindowSeconds { get; set; } = 30;
 }
 
 public sealed class OllamaConfig
