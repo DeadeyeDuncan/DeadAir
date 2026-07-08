@@ -1,18 +1,17 @@
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using DeadAir.Core;
 
 namespace DeadAir.App;
 
 public partial class RecordingIndicatorWindow : Window
 {
-    private const int BarCount = 24;
-    private const double BarWidth = 6, BarGap = 4, CanvasHeight = 40;
-    private const double MinBarHeight = 4, MaxBarGrowth = 32;
+    private const int ScopeSamples = 296;      // one sample per horizontal px
+    private const double ScopeWidth = 296, ScopeHeight = 40;
+    private const int InterimMaxChars = 46;
 
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -23,27 +22,19 @@ public partial class RecordingIndicatorWindow : Window
     [DllImport("user32.dll")]
     private static extern int SetWindowLongW(nint hWnd, int nIndex, int value);
 
-    private readonly LevelRingBuffer _levels = new(BarCount);
-    private readonly Rectangle[] _bars = new Rectangle[BarCount];
+    private readonly WaveformRingBuffer _wave = new(ScopeSamples);
+    private readonly SolidColorBrush _dim =
+        new(Color.FromArgb(0x66, 0xE1, 0xF5, 0xFE));
+    private readonly SolidColorBrush _hot =
+        new(Color.FromArgb(0xFF, 0x8B, 0xE9, 0xFD));
+    private string _lastPartial = "";
 
     public RecordingIndicatorWindow()
     {
         InitializeComponent();
-        var brush = new SolidColorBrush(Color.FromRgb(0x4F, 0xC3, 0xF7));
-        brush.Freeze();
-        for (int i = 0; i < BarCount; i++)
-        {
-            _bars[i] = new Rectangle
-            {
-                Width = BarWidth,
-                RadiusX = 3,
-                RadiusY = 3,
-                Fill = brush,
-            };
-            Canvas.SetLeft(_bars[i], i * (BarWidth + BarGap));
-            BarCanvas.Children.Add(_bars[i]);
-        }
-        Render();
+        _dim.Freeze();
+        _hot.Freeze();
+        RenderScope();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -57,16 +48,37 @@ public partial class RecordingIndicatorWindow : Window
             | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
     }
 
-    public void Push(double level)
+    public void PushWaveform(IReadOnlyList<double> samples)
     {
-        _levels.Push(level);
-        Render();
+        _wave.PushRange(samples);
+        RenderScope();
+    }
+
+    public void SetPartial(string text)
+    {
+        int common = PartialText.CommonPrefixWords(_lastPartial, text);
+        _lastPartial = text;
+
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string stable = string.Join(' ', words.Take(common));
+        string changed = string.Join(' ', words.Skip(common));
+
+        // Left-elide the stable head so the newest (changed) words stay visible.
+        stable = PartialText.LeftElide(stable, InterimMaxChars);
+
+        InterimText.Inlines.Clear();
+        if (stable.Length > 0)
+            InterimText.Inlines.Add(new Run(stable + " ") { Foreground = _dim });
+        if (changed.Length > 0)
+            InterimText.Inlines.Add(new Run(changed) { Foreground = _hot });
     }
 
     public void ShowIndicator()
     {
-        _levels.Reset();
-        Render();
+        _wave.Reset();
+        _lastPartial = "";
+        InterimText.Inlines.Clear();
+        RenderScope();
         var area = SystemParameters.WorkArea;
         Left = area.Left + (area.Width - Width) / 2;
         Top = area.Bottom - Height - 16;
@@ -75,14 +87,17 @@ public partial class RecordingIndicatorWindow : Window
 
     public void HideIndicator() => Hide();
 
-    private void Render()
+    private void RenderScope()
     {
-        var values = _levels.Values;
-        for (int i = 0; i < BarCount; i++)
+        var v = _wave.Values;
+        var pts = new PointCollection(v.Count);
+        double mid = ScopeHeight / 2.0;
+        for (int i = 0; i < v.Count; i++)
         {
-            var h = MinBarHeight + values[i] * MaxBarGrowth;
-            _bars[i].Height = h;
-            Canvas.SetTop(_bars[i], (CanvasHeight - h) / 2);
+            double x = i * (ScopeWidth / (v.Count - 1));
+            double y = mid - v[i] * mid;   // sample in [-1,1] -> canvas y
+            pts.Add(new Point(x, y));
         }
+        ScopeLine.Points = pts;
     }
 }
