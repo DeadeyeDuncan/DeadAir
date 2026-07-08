@@ -114,6 +114,7 @@ def main() -> None:
                           "model": cfg.model if engine.name == "gpu"
                           else cfg.cpu_model})
                 elif c == "start":
+                    stop_partial()
                     cap.start()
                     emit({"event": "recording"})
                     partial = _maybe_start_partials(cfg, engine, cap, emit,
