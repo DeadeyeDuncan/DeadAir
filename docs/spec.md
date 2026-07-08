@@ -100,7 +100,7 @@ per line.
 ### Host → sidecar
 | Message | Meaning |
 |---|---|
-| `{"cmd":"config","engine":"auto\|gpu\|cpu","model":"large-v3-turbo","mic":"<id\|default>","dictionary":["…"]}` | Sent once at startup and on settings change. `dictionary` seeds Whisper `initial_prompt`. |
+| `{"cmd":"config","engine":"auto\|gpu\|cpu","model":"large-v3-turbo","mic":"<id\|default>","dictionary":["…"],"partials":true,"partial_interval_ms":600,"partial_min_ms":200,"partial_window_s":30}` | Sent once at startup and on settings change. `dictionary` seeds Whisper `initial_prompt`. |
 | `{"cmd":"start"}` | Key-down: begin capturing + VAD. |
 | `{"cmd":"stop"}` | Key-up: finalize capture, run ASR, return `final`. |
 | `{"cmd":"cancel"}` | Discard the in-progress utterance (e.g. hotkey released too fast / user abort). |
@@ -115,6 +115,8 @@ per line.
 | `{"event":"final","text":"…","ms":1234}` | Transcript + wall-clock ASR time. |
 | `{"event":"empty"}` | VAD found no speech / transcript empty. |
 | `{"event":"error","where":"asr\|mic\|server","message":"…"}` | Recoverable error for this utterance. |
+| `{"event":"waveform","samples":[…]}` | ~40 Hz while recording. Downsampled PCM min/max envelope for the pill oscilloscope. |
+| `{"event":"partial","text":"…","seq":N}` | GPU-only interim transcript for the pill preview. Best-effort; never injected. |
 
 The host treats an unresponsive sidecar (no `final`/`empty`/`error` within a
 timeout after `stop`) as a fault → restart via SidecarManager.
@@ -333,7 +335,7 @@ Reference skeleton: [`cjpais/Handy`](https://github.com/cjpais/Handy) (Rust).
 ## 10. Phasing
 
 - **Phase 0 — MVP (this spec):** ~2–3 weeks part-time. Ship the full loop above.
-- **Phase 1 — Streaming/partials:** rolling VAD-gated re-decode, interim text in
+- **Phase 1 — Streaming/partials (in progress, this branch):** rolling VAD-gated re-decode, interim text in
   a small status window. ~1 week.
 - **Phase 2 — Per-app context:** `GetForegroundWindow → PID → process name` into
   an app-rules file biasing tone; keep context on-device. ~1 week.
