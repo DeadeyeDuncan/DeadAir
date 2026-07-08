@@ -84,3 +84,26 @@ def test_stop_during_inflight_partial_suppresses_emit():
     holder["loop"] = loop
     assert loop.tick() is False        # second guard suppresses the emit
     assert events == []
+
+
+def test_partial_loop_only_starts_for_gpu_engine():
+    # Rehearses the main-loop guard without real audio/model: a cpu-named
+    # engine must never be wrapped in a PartialLoop by _maybe_start_partials.
+    from asr_sidecar.__main__ import _maybe_start_partials
+    from asr_sidecar.config import SidecarConfig
+
+    class E:
+        name = "cpu"
+    started = _maybe_start_partials(SidecarConfig(engine="cpu"),
+                                    E(), FakeCap(), lambda e: None,
+                                    threading.Lock())
+    assert started is None            # no loop for cpu
+
+    class G(E):
+        name = "gpu"
+        def try_partial(self, a, p=""):
+            return "x"
+    loop = _maybe_start_partials(SidecarConfig(), G(), FakeCap(),
+                                 lambda e: None, threading.Lock())
+    assert loop is not None
+    loop.stop()

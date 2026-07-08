@@ -1,6 +1,7 @@
 """Runtime GPU-death fallback: if the whisper-server crashes and the engine's
 own respawn/retry can't recover, the sidecar must drop to CPU (unless the user
 pinned engine=gpu) so a dictation's words are never lost."""
+import threading
 import numpy as np
 import asr_sidecar.__main__ as main_mod
 from asr_sidecar.config import SidecarConfig
@@ -42,7 +43,8 @@ def test_finish_falls_back_to_cpu_when_gpu_engine_dies(monkeypatch):
     gpu = _DeadGpu()
     cfg = SidecarConfig(engine="auto", cpu_model="small")
 
-    new_engine = main_mod._finish(np.ones(16000, dtype=np.float32), cfg, gpu)
+    new_engine = main_mod._finish(np.ones(16000, dtype=np.float32), cfg, gpu,
+                                  threading.Lock())
 
     assert new_engine.name == "cpu"      # swapped so next utterance skips GPU
     assert gpu.closed                    # dead GPU engine released
@@ -58,7 +60,8 @@ def test_finish_gpu_forced_does_not_fall_back(monkeypatch):
     gpu = _DeadGpu()
     cfg = SidecarConfig(engine="gpu")    # user pinned GPU: no silent CPU swap
 
-    new_engine = main_mod._finish(np.ones(16000, dtype=np.float32), cfg, gpu)
+    new_engine = main_mod._finish(np.ones(16000, dtype=np.float32), cfg, gpu,
+                                  threading.Lock())
 
     assert new_engine is gpu             # not swapped
     assert any(e.get("event") == "error" and e.get("where") == "asr"

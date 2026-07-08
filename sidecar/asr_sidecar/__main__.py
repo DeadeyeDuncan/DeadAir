@@ -1,6 +1,7 @@
 """DeadAir ASR sidecar. Protocol: spec.md §3. stdout = protocol only."""
 import logging
 import sys
+import threading
 import time
 import numpy as np
 from .audio import load_wav
@@ -8,15 +9,16 @@ from .capture import MicCapture
 from .config import SidecarConfig
 from .engines import CpuEngine, GpuEngineError, create_engine
 from .ipc import emit, read_commands
-from .waveform import WaveformEmitter
+from .partials import PartialLoop
 from .vad import extract_speech
+from .waveform import WaveformEmitter
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("sidecar")
 
 
-def _finish(audio: np.ndarray, cfg: SidecarConfig, engine):
+def _finish(audio: np.ndarray, cfg: SidecarConfig, engine, lock):
     """Transcribe one utterance. Returns the engine to use for the next one —
     normally the same, but a CPU engine if a crashed GPU server couldn't be
     recovered (words are never lost). Emits final/empty/error events."""
@@ -32,7 +34,8 @@ def _finish(audio: np.ndarray, cfg: SidecarConfig, engine):
         return engine
     prompt = ", ".join(cfg.dictionary)
     try:
-        text = engine.transcribe(speech, initial_prompt=prompt)
+        with lock:
+            text = engine.transcribe(speech, initial_prompt=prompt)
     except GpuEngineError as e:
         # The GPU server crashed and the engine's own respawn/retry couldn't
         # recover it. Unless the user pinned engine=gpu, drop to CPU so this
@@ -67,15 +70,38 @@ def _finish(audio: np.ndarray, cfg: SidecarConfig, engine):
     return engine
 
 
+def _maybe_start_partials(cfg, engine, cap, emit_fn, lock):
+    """Start a PartialLoop iff partials are enabled AND the engine is GPU.
+    Returns the running loop, or None."""
+    if not cfg.partials or getattr(engine, "name", None) != "gpu":
+        return None
+    loop = PartialLoop(cap, engine, emit_fn, lock,
+                       prompt=", ".join(cfg.dictionary),
+                       min_ms=cfg.partial_min_ms,
+                       window_s=cfg.partial_window_s)
+    loop.start(interval_ms=cfg.partial_interval_ms)
+    return loop
+
+
 def main() -> None:
     cfg = SidecarConfig()
     engine = None
     cap = None
+    partial = None
+    server_lock = threading.Lock()
+
+    def stop_partial():
+        nonlocal partial
+        if partial is not None:
+            partial.stop()
+            partial = None
+
     try:
         for cmd in read_commands():
             c = cmd.get("cmd")
             try:
                 if c == "config":
+                    stop_partial()
                     cfg = SidecarConfig.from_cmd(cmd)
                     if engine:
                         engine.close()
@@ -90,12 +116,17 @@ def main() -> None:
                 elif c == "start":
                     cap.start()
                     emit({"event": "recording"})
+                    partial = _maybe_start_partials(cfg, engine, cap, emit,
+                                                    server_lock)
                 elif c == "stop":
-                    engine = _finish(cap.stop(), cfg, engine)
+                    stop_partial()
+                    engine = _finish(cap.stop(), cfg, engine, server_lock)
                 elif c == "cancel":
+                    stop_partial()
                     cap.cancel()
                 elif c == "transcribe_wav":  # test/debug hook (spec §9)
-                    engine = _finish(load_wav(cmd["path"]), cfg, engine)
+                    engine = _finish(load_wav(cmd["path"]), cfg, engine,
+                                     server_lock)
                 elif c == "shutdown":
                     break
                 else:
@@ -106,6 +137,7 @@ def main() -> None:
                 emit({"event": "error", "where": "mic" if c in ("start", "stop")
                       else "asr", "message": str(e)})
     finally:
+        stop_partial()
         if cap is not None:
             cap.cancel()
         if engine:
