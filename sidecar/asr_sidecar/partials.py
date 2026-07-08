@@ -24,22 +24,22 @@ class PartialLoop:
     def tick(self) -> bool:
         if self._stop.is_set():
             return False
-        audio = self._cap.snapshot()
-        if len(audio) < self._min_samples or len(audio) <= self._last_len:
-            return False
-        self._last_len = len(audio)
-        window = audio[-self._window_samples:]
         try:
+            audio = self._cap.snapshot()
+            if len(audio) < self._min_samples or len(audio) <= self._last_len:
+                return False
+            self._last_len = len(audio)
+            window = audio[-self._window_samples:]
             with self._lock:
                 text = self._engine.try_partial(window, self._prompt)
+            if self._stop.is_set() or not text:
+                return False
+            self._seq += 1
+            self._emit({"event": "partial", "text": text, "seq": self._seq})
+            return True
         except Exception:
             log.exception("partial tick failed")   # stderr only, never emit error
             return False
-        if self._stop.is_set() or not text:
-            return False
-        self._seq += 1
-        self._emit({"event": "partial", "text": text, "seq": self._seq})
-        return True
 
     def start(self, interval_ms: int = 600) -> None:
         interval = interval_ms / 1000.0

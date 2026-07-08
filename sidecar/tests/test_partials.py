@@ -65,3 +65,22 @@ def test_stop_prevents_further_emits():
     loop.stop()                      # stopped before any tick
     assert loop.tick() is False
     assert events == []
+
+
+def test_stop_during_inflight_partial_suppresses_emit():
+    # A stop() that lands WHILE try_partial is running must suppress the late
+    # emit via the post-lock stop-guard (not just the pre-work guard).
+    cap, events = FakeCap(), []
+    holder = {}
+
+    class StoppingEngine:
+        def try_partial(self, audio, prompt=""):
+            holder["loop"].stop()      # stop lands mid-decode
+            return "late text"
+
+    cap.n = 3200
+    loop = PartialLoop(cap, StoppingEngine(), events.append, threading.Lock(),
+                       min_ms=100, window_s=30, sr=16000)
+    holder["loop"] = loop
+    assert loop.tick() is False        # second guard suppresses the emit
+    assert events == []
