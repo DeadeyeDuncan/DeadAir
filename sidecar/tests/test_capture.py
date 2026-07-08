@@ -51,3 +51,19 @@ def test_snapshot_is_nondestructive_and_grows():
     cap._on_frames(np.ones(160, dtype=np.float32))
     assert cap.snapshot().shape == (320,)         # grows, non-destructive
     assert cap.stop().shape == (320,)             # frames still intact after peeks
+
+
+def test_capture_on_block_fires_only_while_recording_and_swallows_errors():
+    cap = MicCapture()
+    seen = []
+    cap.on_block = seen.append
+    cap._on_frames(np.ones(160, dtype=np.float32))       # not recording
+    cap._recording = True
+    cap._on_frames(np.ones(160, dtype=np.float32))       # recording
+    assert len(seen) == 1
+
+    def boom(_):
+        raise RuntimeError("must not escape")
+    cap.on_block = boom
+    cap._on_frames(np.ones(160, dtype=np.float32))       # swallowed
+    assert len(cap.stop()) == 320                        # frames intact

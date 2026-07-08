@@ -36,7 +36,7 @@ def test_engine_closed_when_command_loop_itself_raises(monkeypatch):
 
     monkeypatch.setattr(main_mod, "create_engine", lambda cfg, emit: fake_engine)
     monkeypatch.setattr(main_mod, "MicCapture", lambda mic: fake_capture)
-    monkeypatch.setattr(main_mod, "LevelEmitter", lambda emit: type(
+    monkeypatch.setattr(main_mod, "WaveformEmitter", lambda emit: type(
         "L", (), {"on_block": None})())
     monkeypatch.setattr(main_mod, "emit", lambda obj: None)
 
