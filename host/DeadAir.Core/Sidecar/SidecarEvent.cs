@@ -12,5 +12,6 @@ public sealed record SidecarEvent
     [JsonPropertyName("reason")] public string? Reason { get; init; }
     [JsonPropertyName("where")] public string? Where { get; init; }
     [JsonPropertyName("message")] public string? Message { get; init; }
-    [JsonPropertyName("rms")] public double? Rms { get; init; }
+    [JsonPropertyName("samples")] public double[]? Samples { get; init; }
+    [JsonPropertyName("seq")] public int? Seq { get; init; }
 }
