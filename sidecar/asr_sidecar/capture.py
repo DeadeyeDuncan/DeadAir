@@ -53,6 +53,13 @@ class MicCapture:
             self._recording = False
             self._frames = []
 
+    def snapshot(self) -> np.ndarray:
+        """Copy of frames captured so far, without stopping. For live partials."""
+        with self._lock:
+            frames = list(self._frames)
+        return (np.concatenate(frames) if frames
+                else np.zeros(0, dtype=np.float32))
+
     def _close_stream(self) -> None:
         if self._stream is not None:
             self._stream.stop()

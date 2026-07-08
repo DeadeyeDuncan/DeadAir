@@ -40,3 +40,14 @@ def test_start_twice_closes_first_stream(monkeypatch):
     assert len(FakeStream.instances) == 2
     assert FakeStream.instances[0].stopped and FakeStream.instances[0].closed
     cap.cancel()
+
+
+def test_snapshot_is_nondestructive_and_grows():
+    cap = MicCapture()
+    cap._recording = True
+    assert cap.snapshot().shape == (0,)          # nothing yet
+    cap._on_frames(np.ones(160, dtype=np.float32))
+    assert cap.snapshot().shape == (160,)         # sees first block
+    cap._on_frames(np.ones(160, dtype=np.float32))
+    assert cap.snapshot().shape == (320,)         # grows, non-destructive
+    assert cap.stop().shape == (320,)             # frames still intact after peeks
