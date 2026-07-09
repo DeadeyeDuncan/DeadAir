@@ -26,6 +26,12 @@ class GpuEngine(AsrEngine):
     """
     name = "gpu"
 
+    # A live partial is worthless if it takes longer than a normal utterance;
+    # bounding its POST also caps how long a hung/crashing server can hold the
+    # shared server_lock and stall the authoritative final decode (fast-follow
+    # to the Phase 1 PartialLoop.stop() join-timeout finding).
+    partial_timeout_s: float = 8.0
+
     def __init__(self, server_exe: str, model_path: str, port: int = 8910,
                  startup_timeout: int = 60, spawn: bool = True, transport=None):
         self._server_exe = server_exe
@@ -102,14 +108,17 @@ class GpuEngine(AsrEngine):
 
     # -- inference ----------------------------------------------------------
 
-    def _post(self, audio: np.ndarray, initial_prompt: str) -> str:
+    def _post(self, audio: np.ndarray, initial_prompt: str,
+              timeout: float | None = None) -> str:
         data = {"temperature": "0.0", "response_format": "json"}
         if initial_prompt:
             data["prompt"] = initial_prompt
+        # timeout=None -> use the client default (120s); a value overrides it.
+        kwargs = {"timeout": timeout} if timeout is not None else {}
         r = self._client.post(
             self._url + "/inference",
             files={"file": ("audio.wav", to_wav_bytes(audio), "audio/wav")},
-            data=data)
+            data=data, **kwargs)
         r.raise_for_status()
         return r.json()["text"].strip()
 
@@ -137,7 +146,8 @@ class GpuEngine(AsrEngine):
         failure — never respawns, never raises — so a crashy partial can't
         wedge or delay the authoritative final decode (which keeps self-heal)."""
         try:
-            return self._post(audio, initial_prompt)
+            return self._post(audio, initial_prompt,
+                              timeout=self.partial_timeout_s)
         except Exception:
             return None
 

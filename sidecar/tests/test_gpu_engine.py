@@ -90,6 +90,22 @@ def test_try_partial_returns_text_on_success():
     assert eng.try_partial(np.zeros(16000, dtype=np.float32)) == "interim words"
 
 
+def test_try_partial_bounds_request_timeout():
+    # The partial POST must carry a bounded timeout so a hung server can't hold
+    # the shared server_lock (and stall the final decode) for the client's full
+    # 120s default.
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["timeout"] = request.extensions.get("timeout")
+        return httpx.Response(200, json={"text": "ok"})
+
+    eng = GpuEngine(server_exe="", model_path="", spawn=False,
+                    transport=httpx.MockTransport(handler))
+    eng.try_partial(np.zeros(16000, dtype=np.float32))
+    assert seen["timeout"]["read"] == GpuEngine.partial_timeout_s
+
+
 def test_try_partial_swallows_failure_without_respawn(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("[WinError 10061] actively refused")
