@@ -56,21 +56,14 @@ public partial class RecordingIndicatorWindow : Window
 
     public void SetPartial(string text)
     {
-        int common = PartialText.CommonPrefixWords(_lastPartial, text);
+        var layout = PartialText.LayoutInterim(_lastPartial, text, InterimMaxChars);
         _lastPartial = text;
 
-        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        string stable = string.Join(' ', words.Take(common));
-        string changed = string.Join(' ', words.Skip(common));
-
-        // Left-elide the stable head so the newest (changed) words stay visible.
-        stable = PartialText.LeftElide(stable, InterimMaxChars);
-
         InterimText.Inlines.Clear();
-        if (stable.Length > 0)
-            InterimText.Inlines.Add(new Run(stable + " ") { Foreground = _dim });
-        if (changed.Length > 0)
-            InterimText.Inlines.Add(new Run(changed) { Foreground = _hot });
+        if (layout.Dim.Length > 0)
+            InterimText.Inlines.Add(new Run(layout.Dim + " ") { Foreground = _dim });
+        if (layout.Hot.Length > 0)
+            InterimText.Inlines.Add(new Run(layout.Hot) { Foreground = _hot });
     }
 
     public void ShowIndicator()
