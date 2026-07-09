@@ -100,7 +100,7 @@ per line.
 ### Host → sidecar
 | Message | Meaning |
 |---|---|
-| `{"cmd":"config","engine":"auto\|gpu\|cpu","model":"large-v3-turbo","mic":"<id\|default>","dictionary":["…"],"partials":true,"partial_interval_ms":600,"partial_min_ms":200,"partial_window_s":30}` | Sent once at startup and on settings change. `dictionary` seeds Whisper `initial_prompt`. |
+| `{"cmd":"config","engine":"auto\|gpu\|cpu","model":"large-v3-turbo","mic":"<id\|default>","dictionary":["…"],"partials":true,"partial_interval_ms":600,"partial_min_ms":700,"partial_window_s":30}` | Sent once at startup and on settings change. `dictionary` seeds Whisper `initial_prompt`. |
 | `{"cmd":"start"}` | Key-down: begin capturing + VAD. |
 | `{"cmd":"stop"}` | Key-up: finalize capture, run ASR, return `final`. |
 | `{"cmd":"cancel"}` | Discard the in-progress utterance (e.g. hotkey released too fast / user abort). |
