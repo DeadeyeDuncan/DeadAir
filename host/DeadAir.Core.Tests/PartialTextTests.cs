@@ -70,4 +70,21 @@ public class PartialTextTests
         Assert.Equal("cc", l.Hot);          // newest fully visible
         Assert.Equal("…a bb", l.Dim);
     }
+
+    [Fact]
+    public void LayoutInterim_StableCollapsesWhenHotFillsBudget()
+    {
+        // hot "bcdefgh" (7) + joining space == 8 == maxChars -> stableBudget 0 -> Dim ""
+        var l = PartialText.LayoutInterim("aaaaaa", "aaaaaa bcdefgh", 8);
+        Assert.Equal("", l.Dim);
+        Assert.Equal("bcdefgh", l.Hot);
+    }
+
+    [Fact]
+    public void LayoutInterim_NonPositiveBudgetIsEmpty()
+    {
+        var l = PartialText.LayoutInterim("a", "a b c", 0);
+        Assert.Equal("", l.Dim);
+        Assert.Equal("", l.Hot);
+    }
 }

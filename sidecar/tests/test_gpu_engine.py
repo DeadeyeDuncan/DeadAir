@@ -103,6 +103,7 @@ def test_try_partial_bounds_request_timeout():
     eng = GpuEngine(server_exe="", model_path="", spawn=False,
                     transport=httpx.MockTransport(handler))
     eng.try_partial(np.zeros(16000, dtype=np.float32))
+    assert seen["timeout"] is not None  # fail clearly if httpx drops the extension
     assert seen["timeout"]["read"] == GpuEngine.partial_timeout_s
 
 

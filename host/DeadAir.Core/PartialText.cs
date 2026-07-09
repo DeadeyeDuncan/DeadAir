@@ -38,6 +38,7 @@ public static class PartialText
     /// whole line (all-hot) or produces a hot tail longer than the budget.</summary>
     public static InterimLayout LayoutInterim(string? previous, string? current, int maxChars)
     {
+        if (maxChars <= 0) return new InterimLayout("", "");
         var words = SplitWords(current);
         int common = CommonPrefixWords(previous, current);
         string stable = string.Join(' ', words.Take(common));
