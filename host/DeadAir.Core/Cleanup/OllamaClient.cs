@@ -17,11 +17,34 @@ public sealed class OllamaClient : ITranscriptCleaner
     private readonly AppConfig _cfg;
     private readonly HttpClient _http;
 
+    // Windows Winsock retransmits SYN after an RST, so a connection-refused to
+    // loopback takes ~2s per address before failing — not milliseconds. Cap the
+    // connect phase so a stopped Ollama drops to raw passthrough near-instantly.
+    // Loopback connects complete in <5ms; 250ms is 50x headroom (local/LAN only —
+    // a WAN Ollama URL would need this raised).
+    internal const int ConnectTimeoutMs = 250;
+
     public OllamaClient(AppConfig cfg, HttpMessageHandler? handler = null)
     {
         _cfg = cfg;
-        _http = handler is null ? new HttpClient() : new HttpClient(handler);
+        _http = handler is null
+            ? new HttpClient(new SocketsHttpHandler
+            { ConnectTimeout = TimeSpan.FromMilliseconds(ConnectTimeoutMs) })
+            : new HttpClient(handler);
         _http.Timeout = TimeSpan.FromSeconds(cfg.Ollama.TimeoutSeconds);
+    }
+
+    /// <summary>Config URL with a trailing slash trimmed and literal "localhost"
+    /// rewritten to 127.0.0.1. Windows resolves "localhost" to ::1 first, but Ollama
+    /// binds 127.0.0.1 only — the refused ::1 attempt costs a ~2s Winsock SYN-retry
+    /// on every fresh connection, and would eat the whole ConnectTimeout budget
+    /// before the IPv4 address is ever tried.</summary>
+    private string BaseUrl()
+    {
+        var url = _cfg.Ollama.Url.TrimEnd('/');
+        var uri = new Uri(url);
+        if (uri.Host != "localhost") return url;
+        return new UriBuilder(uri) { Host = "127.0.0.1" }.Uri.ToString().TrimEnd('/');
     }
 
     public async Task<CleanupResult> CleanAsync(string transcript,
@@ -45,7 +68,7 @@ public sealed class OllamaClient : ITranscriptCleaner
                 },
             });
             using var req = new HttpRequestMessage(HttpMethod.Post,
-                _cfg.Ollama.Url.TrimEnd('/') + "/api/generate")
+                BaseUrl() + "/api/generate")
             { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
             // HttpClient.Timeout does not bound the body read once ResponseHeadersRead
@@ -82,8 +105,10 @@ public sealed class OllamaClient : ITranscriptCleaner
         }
         catch (Exception ex)
         {
-            // Timeout (TaskCanceledException) and HTTP failures still return raw transcript—words never lost
-            return new CleanupResult(transcript, true, ex.Message);
+            // Timeout (TaskCanceledException) and HTTP failures still return raw transcript—words never lost.
+            // Base exception: a connect-timeout surfaces as TaskCanceledException whose
+            // "operation was canceled" message reads as user cancellation in the toast.
+            return new CleanupResult(transcript, true, ex.GetBaseException().Message);
         }
     }
 
@@ -106,7 +131,7 @@ public sealed class OllamaClient : ITranscriptCleaner
                 options = new { num_ctx = _cfg.Ollama.NumCtx },
             });
             using var req = new HttpRequestMessage(HttpMethod.Post,
-                _cfg.Ollama.Url.TrimEnd('/') + "/api/generate")
+                BaseUrl() + "/api/generate")
             { Content = new StringContent(body, Encoding.UTF8, "application/json") };
             using var resp = await _http.SendAsync(req, ct);
             return resp.IsSuccessStatusCode;

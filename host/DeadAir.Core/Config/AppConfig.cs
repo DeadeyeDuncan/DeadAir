@@ -41,7 +41,10 @@ public sealed class AsrConfig
 
 public sealed class OllamaConfig
 {
-    public string Url { get; set; } = "http://localhost:11434";
+    // 127.0.0.1, not "localhost": Windows resolves localhost to ::1 first, Ollama
+    // binds IPv4 loopback only, and each refused connect costs a ~2s Winsock
+    // SYN-retry. OllamaClient also rewrites a configured "localhost" defensively.
+    public string Url { get; set; } = "http://127.0.0.1:11434";
     public string Model { get; set; } = "qwen2.5:7b";
     public int NumCtx { get; set; } = 8192;
     public double Temperature { get; set; } = 0.1;

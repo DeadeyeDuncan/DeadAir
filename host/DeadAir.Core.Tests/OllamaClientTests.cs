@@ -226,4 +226,53 @@ public class OllamaClientTests
         var client = new OllamaClient(Cfg(), handler);
         Assert.False(await client.WarmUpAsync());
     }
+
+    [Fact]
+    public async Task LocalhostUrl_IsRewrittenTo127001()
+    {
+        // On Windows "localhost" resolves to ::1 first, but Ollama binds 127.0.0.1
+        // only — every fresh connection eats a ~2s Winsock SYN-retry on the refused
+        // ::1 attempt (~4s total when Ollama is down). The client must talk IPv4
+        // loopback directly regardless of how the config spells it.
+        var ndjson = "{\"response\":\"ok\",\"done\":true}\n";
+        var handler = new CapturingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent(ndjson, Encoding.UTF8) });
+        var cfg = Cfg();
+        cfg.Ollama.Url = "http://localhost:11434";
+        var client = new OllamaClient(cfg, handler);
+
+        await client.CleanAsync(new string('x', 60), CleanupMode.Faithful);
+        Assert.Equal("127.0.0.1", handler.LastRequest!.RequestUri!.Host);
+        Assert.Equal(11434, handler.LastRequest!.RequestUri!.Port);
+
+        await client.WarmUpAsync();
+        Assert.Equal("127.0.0.1", handler.LastRequest!.RequestUri!.Host);
+    }
+
+    [Fact]
+    public async Task OllamaDown_FailsFastToRawTranscript()
+    {
+        // Regression: with Ollama stopped, a refused loopback connect costs ~2s per
+        // address in Winsock SYN retries (~4s via "localhost" dual-stack), delaying
+        // the words-never-lost passthrough. The default handler's ConnectTimeout must
+        // cut that to sub-second. Uses a real socket against a port we just freed.
+        var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var deadPort = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+
+        var cfg = Cfg();
+        cfg.Ollama.Url = $"http://localhost:{deadPort}";
+        var client = new OllamaClient(cfg); // default handler — the one under test
+        var longText = new string('x', 60);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var r = await client.CleanAsync(longText, CleanupMode.Faithful);
+        sw.Stop();
+
+        Assert.True(r.Skipped);
+        Assert.Equal(longText, r.Text);
+        Assert.True(sw.ElapsedMilliseconds < 1500,
+            $"expected fail-fast passthrough well under 1500ms, took {sw.ElapsedMilliseconds}ms");
+    }
 }
