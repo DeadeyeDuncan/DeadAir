@@ -16,9 +16,13 @@
                 <Polyline x:Name="ScopeLine" Stroke="#4FC3F7" StrokeThickness="1.4"
                           StrokeLineJoin="Round"/>
             </Canvas>
+            <!-- TextAlignment=Right: a wide-glyph line that overflows the 296px
+                 row in pixels must spill off the stale LEFT edge — LeftElide
+                 guarantees the newest (rightmost) words stay visible. -->
             <TextBlock x:Name="InterimText" Grid.Row="1" FontSize="12"
                        FontStyle="Italic" Foreground="#66E1F5FE"
-                       TextTrimming="None" TextWrapping="NoWrap"/>
+                       TextTrimming="None" TextWrapping="NoWrap"
+                       TextAlignment="Right"/>
         </Grid>
     </Border>
 </Window>

@@ -77,7 +77,16 @@ public sealed class Orchestrator(
         switch (e.Event)
         {
             case "ready":
-                lock (_gate) { _utteranceId++; SetState(FlowState.Idle); }
+                lock (_gate)
+                {
+                    _utteranceId++;
+                    // Don't force Idle while HandleFinalAsync owns the state
+                    // (Cleaning/Injecting): its finally lands at Idle anyway,
+                    // and forcing Idle here would let a new Recording start
+                    // that the finally then stomps (silent utterance loss).
+                    if (State is not FlowState.Cleaning and not FlowState.Injecting)
+                        SetState(FlowState.Idle);
+                }
                 break;
             case "final":
                 bool proceed;
@@ -115,7 +124,14 @@ public sealed class Orchestrator(
             if (result.Skipped && result.Reason != "below skip guard")
                 notifier.Toast($"cleanup skipped: {result.Reason}");
 
-            SetState(FlowState.Injecting);
+            // Only advance the state if this utterance still owns it — an
+            // unsolicited reset (error/empty) may have moved on, possibly into
+            // a NEW Recording. The injection itself still happens either way:
+            // words are never lost.
+            lock (_gate)
+            {
+                if (State == FlowState.Cleaning) SetState(FlowState.Injecting);
+            }
             var ok = await injector.InjectAsync(result.Text);
             if (!ok)
                 notifier.Toast("Couldn't insert — text on clipboard, press Ctrl+V");
@@ -125,7 +141,13 @@ public sealed class Orchestrator(
         }
         finally
         {
-            SetState(FlowState.Idle);
+            // Land at Idle only from our own states — never demote a new
+            // Recording that started after an unsolicited mid-cleanup reset.
+            lock (_gate)
+            {
+                if (State is FlowState.Cleaning or FlowState.Injecting)
+                    SetState(FlowState.Idle);
+            }
         }
     }
 }

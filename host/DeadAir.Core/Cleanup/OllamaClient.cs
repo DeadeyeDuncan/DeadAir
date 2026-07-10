@@ -100,6 +100,10 @@ public sealed class OllamaClient : ITranscriptCleaner
                 prompt = "",
                 stream = false,
                 keep_alive = _cfg.Ollama.KeepAlive,
+                // Must match CleanAsync's load-affecting options: a warm-up at
+                // Ollama's default num_ctx loads a runner CleanAsync can't
+                // reuse, so the first dictation would pay the reload anyway.
+                options = new { num_ctx = _cfg.Ollama.NumCtx },
             });
             using var req = new HttpRequestMessage(HttpMethod.Post,
                 _cfg.Ollama.Url.TrimEnd('/') + "/api/generate")

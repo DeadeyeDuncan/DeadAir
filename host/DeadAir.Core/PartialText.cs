@@ -29,7 +29,11 @@ public static class PartialText
     public static string LeftElide(string text, int maxChars)
     {
         if (maxChars < 1 || text.Length <= maxChars) return text;
-        return "…" + text[^(maxChars - 1)..];
+        int cut = text.Length - (maxChars - 1);
+        // Never split a surrogate pair: a cut landing on the low half would
+        // leave a lone surrogate at the front (renders as U+FFFD).
+        if (char.IsLowSurrogate(text[cut])) cut++;
+        return "…" + text[cut..];
     }
 
     /// <summary>The dim (stable prefix) / hot (just-changed suffix) split for the

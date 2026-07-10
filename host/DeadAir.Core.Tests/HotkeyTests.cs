@@ -17,6 +17,16 @@ public class HotkeyTests
     }
 
     [Fact]
+    public void KbdllHookStruct_MarshalsToWin32Size()
+    {
+        // Win32 x64: KBDLLHOOKSTRUCT = vkCode(4) + scanCode(4) + flags(4)
+        //          + time(4) + dwExtraInfo(8) = 24. Same P/Invoke bug class as
+        //          INPUT (pinned at 40) and MSG (pinned at 48) — this is the
+        //          last marshaled out/ref Win32 struct in host/ without a pin.
+        Assert.Equal(24, KeyboardHook.KbdllHookStructSize);
+    }
+
+    [Fact]
     public void DownFiresOnce_AutoRepeatIgnored_UpFires()
     {
         var sm = new HoldKeyStateMachine(VK);

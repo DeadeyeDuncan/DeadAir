@@ -36,6 +36,14 @@ sealed class ThrowingInjector : ITextInjector
         throw new InvalidOperationException("injector exploded");
 }
 
+sealed class BlockingCleaner : ITranscriptCleaner
+{
+    public readonly TaskCompletionSource<CleanupResult> Gate = new(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task<CleanupResult> CleanAsync(string t, CleanupMode m,
+        CancellationToken ct = default) => Gate.Task;
+}
+
 sealed class FakeNotifier : IUserNotifier
 {
     public List<string> Toasts = new();
@@ -201,6 +209,82 @@ public class OrchestratorTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "raw" }));
         Assert.Equal(FlowState.Idle, o.State);
+    }
+
+    [Fact]
+    public async Task ReadyEvent_MidCleaning_DoesNotForceIdle()
+    {
+        // An unsolicited ready (sidecar crash-restart resends config -> ready)
+        // arriving while HandleFinalAsync owns the state must NOT force Idle —
+        // that would let a new Recording start that the finally then stomps.
+        var cl = new BlockingCleaner();
+        var inj = new FakeInjector(ok: true);
+        var o = Make(new FakeSidecar(), cl, inj, new FakeNotifier());
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        var finalTask = o.OnSidecarEventAsync(
+            new SidecarEvent { Event = "final", Text = "raw" });
+        Assert.Equal(FlowState.Cleaning, o.State);
+
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "ready", Engine = "gpu" });
+        Assert.Equal(FlowState.Cleaning, o.State);   // not stomped
+
+        cl.Gate.SetResult(new CleanupResult("clean", false, null));
+        await finalTask;
+        Assert.Equal(FlowState.Idle, o.State);       // final path still lands at Idle
+        Assert.Equal("clean", inj.Injected);
+    }
+
+    [Fact]
+    public async Task HandleFinal_TailDoesNotStompNewRecording()
+    {
+        // If something legitimately resets to Idle mid-cleanup (unsolicited
+        // error) and the user starts a NEW utterance, the old utterance's
+        // in-flight tail must still inject its words but must NOT demote the
+        // new Recording via SetState(Injecting)/finally-Idle.
+        var cl = new BlockingCleaner();
+        var inj = new FakeInjector(ok: true);
+        var o = Make(new FakeSidecar(), cl, inj, new FakeNotifier());
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        var finalTask = o.OnSidecarEventAsync(
+            new SidecarEvent { Event = "final", Text = "raw" });
+        Assert.Equal(FlowState.Cleaning, o.State);
+
+        await o.OnSidecarEventAsync(
+            new SidecarEvent { Event = "error", Where = "asr", Message = "x" });
+        await o.OnHotkeyDownAsync();
+        Assert.Equal(FlowState.Recording, o.State);
+
+        cl.Gate.SetResult(new CleanupResult("clean", false, null));
+        await finalTask;
+        Assert.Equal(FlowState.Recording, o.State);  // new utterance untouched
+        Assert.Equal("clean", inj.Injected);         // words never lost
+    }
+
+    [Fact]
+    public async Task PartialAndWaveformEvents_NeverInjectOrChangeState()
+    {
+        // Invariant 1 pinned at the Core layer: interim events are no-ops to
+        // the orchestrator in every state (routing away happens in the
+        // untested WPF layer; this pin survives even if that routing changes).
+        var inj = new FakeInjector(ok: true);
+        var o = Make(new FakeSidecar(),
+            new FakeCleaner(new CleanupResult("x", false, null)), inj,
+            new FakeNotifier());
+
+        await o.OnSidecarEventAsync(new SidecarEvent
+        { Event = "partial", Text = "ghost", Seq = 1 });
+        await o.OnSidecarEventAsync(new SidecarEvent
+        { Event = "waveform", Samples = new[] { 0.1, -0.1 } });
+        Assert.Equal(FlowState.Idle, o.State);
+        Assert.Null(inj.Injected);
+
+        await o.OnHotkeyDownAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent
+        { Event = "partial", Text = "ghost two", Seq = 2 });
+        Assert.Equal(FlowState.Recording, o.State);
+        Assert.Null(inj.Injected);
     }
 
     [Fact]

@@ -21,6 +21,16 @@ public class PartialTextTests
     }
 
     [Fact]
+    public void LeftElide_NeverSplitsSurrogatePair()
+    {
+        // A cut landing inside an emoji must drop the whole pair, not leave a
+        // lone low surrogate at the front (renders as U+FFFD in the pill).
+        Assert.Equal("…bb", PartialText.LeftElide("aaaa\U0001F600bb", 4));
+        // Cut landing on the high surrogate keeps the pair intact.
+        Assert.Equal("…\U0001F600", PartialText.LeftElide("aaaaaaaaaa\U0001F600", 3));
+    }
+
+    [Fact]
     public void SplitWords_SplitsOnAnyWhitespace()
     {
         Assert.Equal(new[] { "a", "b", "c" }, PartialText.SplitWords("a\tb\nc"));

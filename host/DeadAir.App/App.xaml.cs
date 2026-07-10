@@ -18,7 +18,8 @@ public partial class App : Application
     private Orchestrator _orchestrator = null!;
     private KeyboardHook _hook = null!;
     private TaskbarIcon _tray = null!;
-    private StreamWriter _log = null!;
+    private TextWriter _log = null!;
+    private System.Windows.Controls.MenuItem _modeMenuItem = null!;
     private RecordingIndicatorWindow _indicator = null!;
     private Mutex _singleInstance = null!;
 
@@ -46,11 +47,14 @@ public partial class App : Application
         Directory.CreateDirectory(logDir);
         // FileShare.ReadWrite so a lingering/zombie handle can never turn a log
         // open into a launch-killing crash (defense-in-depth behind the mutex).
-        var logStream = new FileStream(Path.Combine(logDir,
-            $"deadair-{DateTime.Now:yyyyMMdd}.log"),
+        var logPath = Path.Combine(logDir, $"deadair-{DateTime.Now:yyyyMMdd}.log");
+        var logStream = new FileStream(logPath,
             FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-        _log = new StreamWriter(logStream) { AutoFlush = true };
-        _log.WriteLine($"{DateTime.Now:HH:mm:ss} app started, log={((FileStream)_log.BaseStream).Name}");
+        // Synchronized: the warm-up task, Faulted stderr dump, LatencyLogged and
+        // FireAndForget all write from pool threads — StreamWriter itself is not
+        // thread-safe (interleaved writes corrupt lines).
+        _log = TextWriter.Synchronized(new StreamWriter(logStream) { AutoFlush = true });
+        _log.WriteLine($"{DateTime.Now:HH:mm:ss} app started, log={logPath}");
 
         _tray = new TaskbarIcon
         {
@@ -152,10 +156,17 @@ public partial class App : Application
     {
         var menu = new System.Windows.Controls.ContextMenu();
 
+        // IsChecked must reflect the loaded config (the orchestrator already
+        // starts in config.Cleanup.Mode) and must be set BEFORE the handlers
+        // attach — _orchestrator doesn't exist yet at menu-build time.
         var mode = new System.Windows.Controls.MenuItem
-        { Header = "Polished mode", IsCheckable = true };
+        {
+            Header = "Polished mode", IsCheckable = true,
+            IsChecked = _config.Cleanup.Mode == CleanupMode.Polished,
+        };
         mode.Checked += (_, _) => _orchestrator.Mode = CleanupMode.Polished;
         mode.Unchecked += (_, _) => _orchestrator.Mode = CleanupMode.Faithful;
+        _modeMenuItem = mode;
 
         var settings = new System.Windows.Controls.MenuItem
         { Header = "Settings…" };
@@ -194,6 +205,7 @@ public partial class App : Application
         {
             ConfigStore.Save(_config);
             _orchestrator.Mode = _config.Cleanup.Mode; // apply live, no restart needed
+            _modeMenuItem.IsChecked = _config.Cleanup.Mode == CleanupMode.Polished;
             await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
         }
         catch (Exception ex)

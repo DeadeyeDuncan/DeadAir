@@ -34,6 +34,10 @@ public sealed class KeyboardHook : IDisposable
     /// Size-pinned in a test: a wrong MSG size re-introduces the pump crash.
     public static int MessageStructSize => Marshal.SizeOf<MSG>();
 
+    /// Size-pinned in a test: PtrToStructure reads through lParam with this
+    /// layout — a drift from the 24-byte Win32 KBDLLHOOKSTRUCT misreads flags.
+    public static int KbdllHookStructSize => Marshal.SizeOf<KBDLLHOOKSTRUCT>();
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern nint SetWindowsHookExW(int id, HookProc proc,
         nint hMod, uint threadId);
