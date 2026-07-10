@@ -57,6 +57,7 @@ class GpuEngine(AsrEngine):
     def _spawn(self) -> None:
         """Launch (or relaunch) whisper-server and block until it answers."""
         self._terminate_proc()
+        self._assert_port_free()
         self._proc = subprocess.Popen(
             [self._server_exe, "-m", self._model_path, "--host", "127.0.0.1",
              "--port", str(self._port)],
@@ -87,6 +88,18 @@ class GpuEngine(AsrEngine):
             except subprocess.TimeoutExpired:
                 self._proc.kill()
         self._proc = None
+
+    def _assert_port_free(self) -> None:
+        """An orphaned whisper-server squatting the port would answer
+        _wait_ready while our fresh child bind-fails and dies unnoticed
+        (whisper.cpp loads the model before binding) — refuse loudly."""
+        try:
+            self._client.get(self._url + "/", timeout=2)
+        except httpx.TransportError:
+            return  # nothing listening — safe to bind
+        raise GpuEngineError(
+            f"port {self._port} already in use (stale whisper-server?) — "
+            "kill the orphaned process or change gpu_port")
 
     def _wait_ready(self, timeout: int) -> None:
         deadline = time.time() + timeout

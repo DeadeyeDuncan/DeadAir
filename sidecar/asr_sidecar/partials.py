@@ -14,8 +14,10 @@ class PartialLoop:
         self._emit = emit_fn
         self._lock = lock
         self._prompt = prompt
-        self._min_samples = int(min_ms * sr / 1000)
-        self._window_samples = int(window_s * sr)
+        # Host-supplied config is untrusted: a non-positive min/window must not
+        # zero out the guards (audio[-0:] would select the WHOLE buffer).
+        self._min_samples = max(int(min_ms * sr / 1000), 1)
+        self._window_samples = max(int(window_s * sr), 1)
         self._last_len = 0
         self._seq = 0
         self._stop = threading.Event()
@@ -42,10 +44,11 @@ class PartialLoop:
             return False
 
     def start(self, interval_ms: int = 600) -> None:
-        interval = interval_ms / 1000.0
+        # Clamp: a non-positive interval must not busy-spin the loop thread.
+        self._interval_s = max(interval_ms, 50) / 1000.0
 
         def run():
-            while not self._stop.wait(interval):
+            while not self._stop.wait(self._interval_s):
                 self.tick()
 
         self._thread = threading.Thread(target=run, daemon=True)

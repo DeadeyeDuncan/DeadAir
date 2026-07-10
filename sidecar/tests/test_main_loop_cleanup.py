@@ -56,6 +56,42 @@ def test_engine_closed_when_command_loop_itself_raises(monkeypatch):
     assert fake_capture.cancelled, "cap.cancel() must run even when the loop itself raises"
 
 
+def test_failed_reconfig_does_not_leave_closed_engine_bound(monkeypatch):
+    # Settings-save hot-reload path: the config handler closes the old engine
+    # before create_engine. If create_engine raises, the loop must NOT keep
+    # dictating against the closed engine — start/stop must answer with a
+    # clear "not configured" error until a config succeeds.
+    events = []
+    first = _FakeEngine()
+    engines = [first]
+
+    def make_engine(cfg, emit):
+        if engines:
+            return engines.pop(0)
+        raise RuntimeError("bad gpu path")
+
+    monkeypatch.setattr(main_mod, "create_engine", make_engine)
+    monkeypatch.setattr(main_mod, "MicCapture", lambda mic: _FakeCapture())
+    monkeypatch.setattr(main_mod, "WaveformEmitter", lambda emit: type(
+        "L", (), {"on_block": None})())
+    monkeypatch.setattr(main_mod, "emit", events.append)
+
+    def commands():
+        yield {"cmd": "config", "engine": "cpu"}
+        yield {"cmd": "config", "engine": "gpu"}   # create_engine raises
+        yield {"cmd": "start"}                     # must not touch dead engine
+        yield {"cmd": "stop"}
+        yield {"cmd": "shutdown"}
+
+    monkeypatch.setattr(main_mod, "read_commands", commands)
+    main_mod.main()
+
+    assert first.closed
+    errs = [e.get("message", "") for e in events if e.get("event") == "error"]
+    assert any("bad gpu path" in m for m in errs)
+    assert sum("not configured" in m for m in errs) == 2  # start AND stop
+
+
 def test_second_start_stops_prior_partial_loop(monkeypatch):
     # A back-to-back start (no intervening stop) must not orphan the prior
     # PartialLoop — the start branch must stop any existing loop first.

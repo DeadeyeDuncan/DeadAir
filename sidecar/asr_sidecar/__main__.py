@@ -42,12 +42,23 @@ def _finish(audio: np.ndarray, cfg: SidecarConfig, engine, lock):
         # utterance (and later ones) still land instead of vanishing into a
         # WinError-10061 toast.
         if getattr(engine, "name", None) == "gpu" and cfg.engine != "gpu":
+            # Secure the fallback BEFORE closing the GPU engine: if the CPU
+            # engine can't be built (model not cached + offline), keep the GPU
+            # engine bound — its respawn self-heal may recover a later
+            # utterance, whereas a closed engine wedges the session.
+            try:
+                cpu = CpuEngine(model_size=cfg.cpu_model)
+            except Exception as e2:
+                log.exception("cpu fallback engine failed to construct")
+                emit({"event": "error", "where": "asr",
+                      "message": f"{e} (cpu fallback unavailable: {e2})"})
+                return engine
             emit({"event": "degraded", "engine": "cpu", "reason": str(e)})
             try:
                 engine.close()
             except Exception:
                 pass
-            engine = CpuEngine(model_size=cfg.cpu_model)
+            engine = cpu
             try:
                 text = engine.transcribe(speech, initial_prompt=prompt)
             except Exception as e2:
@@ -105,6 +116,10 @@ def main() -> None:
                     cfg = SidecarConfig.from_cmd(cmd)
                     if engine:
                         engine.close()
+                        # If create_engine raises we must not keep dictating
+                        # against a closed engine — None makes start/stop
+                        # answer clearly until a config succeeds.
+                        engine = None
                     engine = create_engine(cfg, emit)
                     if cap is not None:
                         cap.cancel()
@@ -114,12 +129,22 @@ def main() -> None:
                           "model": cfg.model if engine.name == "gpu"
                           else cfg.cpu_model})
                 elif c == "start":
+                    if engine is None:
+                        emit({"event": "error", "where": "asr", "message":
+                              "engine not configured (previous config "
+                              "failed) — fix settings and save again"})
+                        continue
                     stop_partial()
                     cap.start()
                     emit({"event": "recording"})
                     partial = _maybe_start_partials(cfg, engine, cap, emit,
                                                     server_lock)
                 elif c == "stop":
+                    if engine is None:
+                        emit({"event": "error", "where": "asr", "message":
+                              "engine not configured (previous config "
+                              "failed) — fix settings and save again"})
+                        continue
                     stop_partial()
                     engine = _finish(cap.stop(), cfg, engine, server_lock)
                 elif c == "cancel":
