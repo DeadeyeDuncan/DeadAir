@@ -100,7 +100,7 @@ per line.
 ### Host → sidecar
 | Message | Meaning |
 |---|---|
-| `{"cmd":"config","engine":"auto\|gpu\|cpu","model":"large-v3-turbo","mic":"<id\|default>","dictionary":["…"],"partials":true,"partial_interval_ms":600,"partial_min_ms":700,"partial_window_s":30}` | Sent once at startup and on settings change. `dictionary` seeds Whisper `initial_prompt`. |
+| `{"cmd":"config","engine":"auto\|gpu\|cpu","model":"large-v3-turbo","cpu_model":"small","mic":"<id\|default>","dictionary":["…"],"gpu_server_exe":"<path>","gpu_model_path":"<path>","gpu_port":8910,"partials":true,"partial_interval_ms":600,"partial_min_ms":700,"partial_window_s":30}` | Sent once at startup and on settings change. `dictionary` seeds Whisper `initial_prompt`; the `gpu_*` paths are resolved by the host before sending. |
 | `{"cmd":"start"}` | Key-down: begin capturing + VAD. |
 | `{"cmd":"stop"}` | Key-up: finalize capture, run ASR, return `final`. |
 | `{"cmd":"cancel"}` | Discard the in-progress utterance (e.g. hotkey released too fast / user abort). |
@@ -118,8 +118,12 @@ per line.
 | `{"event":"waveform","samples":[…]}` | ~40 Hz while recording. Downsampled PCM min/max envelope for the pill oscilloscope. |
 | `{"event":"partial","text":"…","seq":N}` | GPU-only interim transcript for the pill preview. Best-effort; never injected. |
 
-The host treats an unresponsive sidecar (no `final`/`empty`/`error` within a
-timeout after `stop`) as a fault → restart via SidecarManager.
+The host bounds each utterance with a per-utterance timeout (Orchestrator,
+60 s): if no `final`/`empty`/`error` arrives after `stop`, it abandons the
+utterance (toast "ASR timed out") and returns to Idle — the sidecar is NOT
+restarted for a mere timeout. SidecarManager restarts the sidecar only when
+the process actually exits (capped backoff; 5 consecutive failures →
+`Faulted`).
 
 ---
 
@@ -145,14 +149,16 @@ state to the tray. Sends `config` on startup and whenever settings change.
 `temperature:0.1`, `num_ctx:8192`. **Skip-guard:** transcripts shorter than
 `skipGuardChars` (default 50) bypass the LLM entirely (small models mangle tiny
 inputs) and are injected raw. On timeout / connection failure, return the raw
-transcript unchanged and signal "cleanup skipped". Detects at startup whether
-the configured model is pulled; if not, prompts the user (or offers auto-pull).
+transcript unchanged and signal "cleanup skipped". *(Planned, Phase 4: detect
+at startup whether the configured model is pulled and prompt/auto-pull — today
+a missing model surfaces as "cleanup skipped" raw passthrough.)*
 
 **TextInjector** — Dual strategy, in order:
 1. **Clipboard-paste (default):** save current clipboard → set transcript →
-   synthesize Ctrl+V (Shift+Insert profile for terminals) → restore prior
-   clipboard after a short delay. Fast, format-safe. This is Wispr's primary
-   desktop mechanism.
+   synthesize Ctrl+V (Shift+Insert profile for terminals: Phase 4, the
+   `inject.pasteHotkey` key is reserved for it) → restore prior clipboard
+   after a short delay. Fast, format-safe. This is Wispr's primary desktop
+   mechanism.
 2. **Unicode `SendInput` (fallback):** send characters as `KEYEVENTF_UNICODE`
    events; **split code points above the BMP (emoji, rare CJK) into high+low
    UTF-16 surrogate pairs** sent as two INPUT events. Works over RDP and where
@@ -177,8 +183,9 @@ startup, hot-reloaded on settings save. Structured logging to
 **Tray + Settings (WPF)** — Tray icon reflects state (idle / recording /
 transcribing / cleaning / injecting / error) and offers: quick mode toggle
 (Faithful/Polished), open settings, quit. Settings window: hotkey capture, ASR
-engine (auto/GPU/CPU), ASR model, Ollama model + URL, default cleanup mode +
-mode-toggle hotkey, mic device, dictionary editor, inject method override.
+engine (auto/GPU/CPU), ASR model, Ollama model + URL, default cleanup mode,
+mic device, dictionary editor. *(Mode-toggle hotkey and inject-method override:
+reserved config keys, Phase 4 — see §6 Notes.)*
 Suggested tray/UI libs: **H.NotifyIcon** (tray), native WPF for the settings
 window.
 
@@ -251,20 +258,42 @@ tasks later; not required for MVP.
 
 ## 6. Config schema
 
-`%APPDATA%\DeadAir\config.json`:
+`%APPDATA%\DeadAir\config.json` (matches `AppConfig` as serialized — camelCase
+keys, enum values PascalCase):
 ```json
 {
-  "hotkey": { "key": "RControl+RWin", "mode": "hold" },
+  "hotkey": { "key": "RControl", "mode": "hold" },
   "modeToggleHotkey": "Ctrl+Alt+M",
-  "asr": { "engine": "auto", "gpuModel": "large-v3-turbo", "cpuModel": "small" },
-  "ollama": { "url": "http://localhost:11434", "model": "qwen2.5:7b", "numCtx": 8192, "temperature": 0.1 },
-  "cleanup": { "mode": "faithful", "skipGuardChars": 50 },
+  "asr": {
+    "engine": "auto", "gpuModel": "large-v3-turbo", "cpuModel": "small",
+    "gpuServerExe": "..\\..\\tools\\whisper\\whisper-server.exe",
+    "gpuModelPath": "..\\..\\models\\ggml-large-v3-turbo.bin",
+    "gpuPort": 8910,
+    "partials": true, "partialIntervalMs": 600, "partialMinMs": 700,
+    "partialWindowSeconds": 30
+  },
+  "ollama": { "url": "http://localhost:11434", "model": "qwen2.5:7b", "numCtx": 8192, "temperature": 0.1, "timeoutSeconds": 20, "keepAlive": "30m" },
+  "cleanup": { "mode": "Faithful", "skipGuardChars": 50 },
   "prompts": { "faithful": "<full text in §5>", "polished": "<full text in §5>" },
   "dictionary": ["DeadMind", "gfx1030", "faster-whisper"],
   "mic": "default",
-  "inject": { "method": "auto", "pasteHotkey": "Ctrl+V", "restoreClipboardDelayMs": 150 }
+  "inject": { "method": "auto", "pasteHotkey": "Ctrl+V", "restoreClipboardDelayMs": 150 },
+  "sidecar": { "python": "..\\..\\sidecar\\.venv\\Scripts\\python.exe", "args": "-m asr_sidecar", "workingDir": "..\\..\\sidecar" }
 }
 ```
+
+Notes:
+- `hotkey.key` is a SINGLE key name from VkMap: `RControl`, `LControl`,
+  `RAlt`, `LAlt`, `RShift`, `LShift`, `CapsLock`, `Scroll`, `Pause`,
+  `F13`–`F24`. Combos are not supported. An unknown name falls back to
+  `RControl` with a toast.
+- Relative paths (`gpuServerExe`, `gpuModelPath`, `sidecar.*`) are resolved by
+  walking UP from the exe directory until the path exists (`ResolveAsset` /
+  `SidecarPathResolver`), so Debug-build depth doesn't matter.
+- **Reserved, not yet implemented** (accepted and persisted, but never read):
+  `modeToggleHotkey`, `hotkey.mode` (hold is the only mode),
+  `inject.method`, `inject.pasteHotkey` (injection is always
+  clipboard-paste-then-SendInput-fallback). Planned for Phase 4.
 
 ---
 
@@ -310,7 +339,7 @@ Reference skeleton: [`cjpais/Handy`](https://github.com/cjpais/Handy) (Rust).
 | Foreground window elevated (UIPI) | Inject fails silently → text left on clipboard + toast "press Ctrl+V". |
 | Empty/no-speech transcript | Inject nothing; brief tray flash. |
 | Transcript < skipGuardChars | Bypass LLM; inject raw. |
-| Ollama model not pulled | Detect at startup; prompt user / offer auto-pull. |
+| Ollama model not pulled | Today: cleanup fails → raw transcript injected + "cleanup skipped" toast. Planned (Phase 4): detect at startup, prompt/auto-pull. |
 | Emoji / supra-BMP chars via SendInput | Split into UTF-16 surrogate pairs (two INPUT events). |
 
 ---
@@ -335,8 +364,10 @@ Reference skeleton: [`cjpais/Handy`](https://github.com/cjpais/Handy) (Rust).
 ## 10. Phasing
 
 - **Phase 0 — MVP (this spec):** ~2–3 weeks part-time. Ship the full loop above.
-- **Phase 1 — Streaming/partials (in progress, this branch):** rolling VAD-gated re-decode, interim text in
-  a small status window. ~1 week.
+- **Phase 1 — Streaming/partials (SHIPPED v0.2.0/v0.2.1):** the Live Pill —
+  scrolling PCM oscilloscope + GPU-only self-correcting interim transcript
+  (preview-only; the key-up final decode stays authoritative). Native
+  streaming ASR / confirmed-prefix decoding remain design-doc non-goals.
 - **Phase 2 — Per-app context:** `GetForegroundWindow → PID → process name` into
   an app-rules file biasing tone; keep context on-device. ~1 week.
 - **Phase 3 — Voice commands / Command Mode:** command grammar + highlight-then-

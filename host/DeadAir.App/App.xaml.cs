@@ -126,8 +126,17 @@ public partial class App : Application
             notifier.Toast("Sidecar keeps crashing — check logs.");
         };
 
-        var machine = new HoldKeyStateMachine(
-            VkMap.Resolve(_config.Hotkey.Key));
+        // A typo'd hotkey name in config.json must degrade to the default,
+        // not crash the launch (OnStartup is async void — a throw here kills
+        // the app before the tray exists).
+        int hotkeyVk;
+        try { hotkeyVk = VkMap.Resolve(_config.Hotkey.Key); }
+        catch (ArgumentException ex)
+        {
+            notifier.Toast($"{ex.Message} — using default hotkey RControl");
+            hotkeyVk = VkMap.Resolve("RControl");
+        }
+        var machine = new HoldKeyStateMachine(hotkeyVk);
         // Hook-thread callbacks must return fast: fire-and-forget to the pool.
         machine.HoldStarted += () => FireAndForget(_orchestrator.OnHotkeyDownAsync, "hotkey-down");
         machine.HoldEnded += () => FireAndForget(_orchestrator.OnHotkeyUpAsync, "hotkey-up");

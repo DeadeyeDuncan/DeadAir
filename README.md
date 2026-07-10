@@ -23,11 +23,18 @@ then inserted at the cursor in any app. Nothing leaves your machine.
 - Tray menu: toggle Faithful/Polished cleanup, Settings, Exit.
 - Custom dictionary (Settings) biases recognition toward your jargon.
 
-## Known limits (v0)
+## Live pill (v0.2)
+While you hold the hotkey, the pill shows a scrolling PCM oscilloscope and a
+live self-correcting interim transcript (GPU engine only — on CPU fallback you
+get the waveform only). The interim text is a preview and is never injected;
+the authoritative decode happens on key-up.
+
+## Known limits
 - Can't type into elevated/admin windows (Windows UIPI) — text is left on
   the clipboard; paste manually.
 - Hotkey changes need an app restart.
-- Utterance-at-a-time (no live streaming yet — Phase 1).
+- Injection is always clipboard-paste with SendInput fallback
+  (`inject.method` / `inject.pasteHotkey` are reserved, not yet honored).
 
 ## Architecture
 See docs/spec.md. Host (C#/WPF) ↔ Python ASR sidecar over stdio JSON;
