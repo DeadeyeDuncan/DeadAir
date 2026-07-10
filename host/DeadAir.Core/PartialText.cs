@@ -31,8 +31,9 @@ public static class PartialText
         if (maxChars < 1 || text.Length <= maxChars) return text;
         int cut = text.Length - (maxChars - 1);
         // Never split a surrogate pair: a cut landing on the low half would
-        // leave a lone surrogate at the front (renders as U+FFFD).
-        if (char.IsLowSurrogate(text[cut])) cut++;
+        // leave a lone surrogate at the front (renders as U+FFFD). At
+        // maxChars==1, cut == text.Length — nothing to probe.
+        if (cut < text.Length && char.IsLowSurrogate(text[cut])) cut++;
         return "…" + text[cut..];
     }
 

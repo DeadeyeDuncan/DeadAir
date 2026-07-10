@@ -141,6 +141,64 @@ def test_spawn_fails_loudly_when_port_already_answers(monkeypatch):
     assert popened["n"] == 0     # refused before launching a doomed child
 
 
+def test_ctor_closes_client_when_spawn_fails(tmp_path, monkeypatch):
+    # A failing spawn inside the ctor (e.g. the port probe) must not leak the
+    # freshly created httpx.Client — pinned-gpu retries would leak one each.
+    exe = tmp_path / "whisper-server.exe"
+    exe.write_bytes(b"")
+    model = tmp_path / "m.bin"
+    model.write_bytes(b"")
+    created = []
+    real_client = httpx.Client
+
+    def tracking_client(*a, **k):
+        c = real_client(*a, **k)
+        created.append(c)
+        return c
+
+    monkeypatch.setattr(
+        "asr_sidecar.engines.gpu_whispercpp.httpx.Client", tracking_client)
+
+    with pytest.raises(GpuEngineError, match="already in use"):
+        GpuEngine(server_exe=str(exe), model_path=str(model),
+                  transport=httpx.MockTransport(
+                      lambda r: httpx.Response(200, json={})))
+    assert created and created[0].is_closed
+
+
+def test_terminate_reaps_after_kill():
+    # kill() without a wait() leaves a not-yet-reaped process that could make
+    # the follow-up port probe report a false "already in use".
+    import subprocess
+
+    class FakeProc:
+        def __init__(self):
+            self.waits = 0
+            self.killed = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout=None):
+            self.waits += 1
+            if self.waits == 1:
+                raise subprocess.TimeoutExpired("whisper-server", timeout)
+            return 0
+
+    eng = GpuEngine(server_exe="", model_path="", spawn=False)
+    proc = FakeProc()
+    eng._proc = proc
+    eng._terminate_proc()
+    assert proc.killed
+    assert proc.waits == 2   # reaped after the kill, not abandoned
+
+
 # Prefer the DEADAIR_* names (post-rename); accept the legacy LOCALFLOW_* ones.
 _WHISPER_SERVER = (os.environ.get("DEADAIR_WHISPER_SERVER")
                    or os.environ.get("LOCALFLOW_WHISPER_SERVER"))

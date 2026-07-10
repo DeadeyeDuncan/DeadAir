@@ -92,6 +92,52 @@ def test_failed_reconfig_does_not_leave_closed_engine_bound(monkeypatch):
     assert sum("not configured" in m for m in errs) == 2  # start AND stop
 
 
+def test_failed_reconfig_mid_recording_cancels_capture(monkeypatch):
+    # A settings save can land while the mic is hot. If the new config fails
+    # in create_engine, the old capture must already be cancelled — otherwise
+    # the InputStream stays open (hot mic, unbounded buffer) until shutdown,
+    # because the stop guard no longer reaches cap.stop().
+    events = []
+    caps = []
+
+    class _Cap(_FakeCapture):
+        def __init__(self):
+            super().__init__()
+            caps.append(self)
+
+    first = _FakeEngine()
+    engines = [first]
+
+    def make_engine(cfg, emit):
+        if engines:
+            return engines.pop(0)
+        raise RuntimeError("bad gpu path")
+
+    snap = {}
+
+    def emit_probe(e):
+        if e.get("event") == "error" and "bad gpu path" in e.get("message", ""):
+            snap["cancelled_when_config_failed"] = caps[0].cancelled
+        events.append(e)
+
+    monkeypatch.setattr(main_mod, "create_engine", make_engine)
+    monkeypatch.setattr(main_mod, "MicCapture", lambda mic: _Cap())
+    monkeypatch.setattr(main_mod, "WaveformEmitter", lambda emit: type(
+        "L", (), {"on_block": None})())
+    monkeypatch.setattr(main_mod, "emit", emit_probe)
+
+    def commands():
+        yield {"cmd": "config", "engine": "cpu"}
+        yield {"cmd": "start"}                     # mic hot
+        yield {"cmd": "config", "engine": "gpu"}   # create_engine raises
+        yield {"cmd": "shutdown"}
+
+    monkeypatch.setattr(main_mod, "read_commands", commands)
+    main_mod.main()
+
+    assert snap["cancelled_when_config_failed"] is True
+
+
 def test_second_start_stops_prior_partial_loop(monkeypatch):
     # A back-to-back start (no intervening stop) must not orphan the prior
     # PartialLoop — the start branch must stop any existing loop first.

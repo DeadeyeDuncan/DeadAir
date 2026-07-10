@@ -50,7 +50,11 @@ class GpuEngine(AsrEngine):
                 raise GpuEngineError(f"model not found: {model_path!r}")
         self._client = httpx.Client(transport=transport, timeout=120)
         if spawn:
-            self._spawn()
+            try:
+                self._spawn()
+            except Exception:
+                self._client.close()  # ctor failed: don't leak the client
+                raise
 
     # -- process lifecycle --------------------------------------------------
 
@@ -87,6 +91,12 @@ class GpuEngine(AsrEngine):
                 self._proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+                # Reap it — an unreaped corpse could still hold the port and
+                # trip the follow-up _assert_port_free probe.
+                try:
+                    self._proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    pass
         self._proc = None
 
     def _assert_port_free(self) -> None:

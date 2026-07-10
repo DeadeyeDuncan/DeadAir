@@ -31,6 +31,14 @@ public class PartialTextTests
     }
 
     [Fact]
+    public void LeftElide_BudgetOfOne_IsJustEllipsis()
+    {
+        // cut == text.Length here — the surrogate probe must not read past the
+        // end (LayoutInterim reaches stableBudget==1 with a 44-char hot tail).
+        Assert.Equal("…", PartialText.LeftElide("ab", 1));
+    }
+
+    [Fact]
     public void SplitWords_SplitsOnAnyWhitespace()
     {
         Assert.Equal(new[] { "a", "b", "c" }, PartialText.SplitWords("a\tb\nc"));

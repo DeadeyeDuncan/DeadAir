@@ -115,14 +115,19 @@ def main() -> None:
                     stop_partial()
                     cfg = SidecarConfig.from_cmd(cmd)
                     if engine:
-                        engine.close()
-                        # If create_engine raises we must not keep dictating
-                        # against a closed engine — None makes start/stop
-                        # answer clearly until a config succeeds.
-                        engine = None
-                    engine = create_engine(cfg, emit)
+                        try:
+                            engine.close()
+                        finally:
+                            # Even if close() raises: never keep dictating
+                            # against a dead engine — None makes start/stop
+                            # answer clearly until a config succeeds.
+                            engine = None
+                    # Cancel the old capture BEFORE create_engine can raise:
+                    # a failed reconfig mid-recording must not leave the mic
+                    # hot (the stop guard below never reaches cap.stop()).
                     if cap is not None:
                         cap.cancel()
+                    engine = create_engine(cfg, emit)
                     cap = MicCapture(cfg.mic)
                     cap.on_block = WaveformEmitter(emit).on_block
                     emit({"event": "ready", "engine": engine.name,
