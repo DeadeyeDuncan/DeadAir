@@ -564,3 +564,126 @@ The one empirical constant is `EnergyGain = 3.0` (assumes loud-speech `MeanAbs �
 - [ ] **Step 4: Log check**
 
 `Get-Content "$env:APPDATA\DeadAir\logs\deadair-$(Get-Date -Format yyyyMMdd).log" -Tail 20` — no ERROR lines from the smoke.
+
+---
+
+### Task 12: Voice-driven strand motion (checkpoint amendment)
+
+**User amendment at the T11 smoke:** "Looks pretty good, I'd like to have the wave move along with the voice as well as grow like they do now." Growth (fan width + glow) stays exactly as shipped; additionally the strands' **drift speed** now tracks loudness — the wave phase advances faster while speaking, settles to a calm crawl in silence.
+
+**Design:** the nebula branch stops deriving `tSlow` from wall time and instead accumulates a phase: `_nebPhase += dt · NebulaDrift · NebulaPhaseRate(enorm)` per frame, where `NebulaPhaseRate(enorm) = 0.6 + 2.4·enorm` (calm = 0.6× the tamed rate; full voice = 3.0× = DeadEye 1.17's original un-slowed drift). `dt` is clamped to 100 ms (DeadEye's own hitch clamp precedent) so a stalled frame can't jump the phase. `WispNoff` is untouched — it still receives a time-like scalar; only the clock feeding it changes.
+
+**Files:**
+- Modify: `host/DeadAir.Core/ScopeGeometry.cs` (append one method)
+- Modify: `host/DeadAir.Core.Tests/ScopeGeometryTests.cs` (append test region)
+- Modify: `host/DeadAir.App/RecordingIndicatorWindow.xaml.cs` (three small edits below)
+
+**Interfaces:**
+- Consumes: `enorm` (already computed in the nebula branch), `NebulaDrift` const.
+- Produces: `static double ScopeGeometry.NebulaPhaseRate(double enorm)` — clamps `enorm` to [0,1], returns `0.6 + 2.4·enorm`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append inside the `ScopeGeometryTests` class (before the closing brace):
+
+```csharp
+    // ---- NebulaPhaseRate: voice-driven drift-speed multiplier ----
+
+    [Theory]
+    [InlineData(0.0, 0.6)]
+    [InlineData(0.5, 1.8)]
+    [InlineData(1.0, 3.0)]
+    [InlineData(-1.0, 0.6)]   // clamped below
+    [InlineData(2.0, 3.0)]    // clamped above
+    public void NebulaPhaseRate_LinearAndClamped(double enorm, double expected)
+        => Assert.Equal(expected, ScopeGeometry.NebulaPhaseRate(enorm), 12);
+
+    [Fact]
+    public void NebulaPhaseRate_MonotonicInEnorm()
+    {
+        double prev = 0;
+        for (double e = 0; e <= 1.0001; e += 0.05)
+        {
+            double r = ScopeGeometry.NebulaPhaseRate(e);
+            Assert.True(r >= prev, $"rate fell at enorm={e}");
+            prev = r;
+        }
+    }
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" --filter "FullyQualifiedName~ScopeGeometryTests" -v minimal --no-restore`
+Expected: BUILD FAILURE — `error CS0117: 'ScopeGeometry' does not contain a definition for 'NebulaPhaseRate'`.
+
+- [ ] **Step 3: Write the implementation**
+
+Append to `ScopeGeometry` (before the class closing brace):
+
+```csharp
+    /// <summary>Nebula drift-rate multiplier from smoothed loudness: calm 0.6×
+    /// the tamed base rate, full voice 3.0× (which restores DeadEye 1.17's
+    /// original un-slowed drift). Linear in enorm, clamped to [0,1].</summary>
+    public static double NebulaPhaseRate(double enorm)
+        => 0.6 + 2.4 * Math.Clamp(enorm, 0.0, 1.0);
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" --filter "FullyQualifiedName~ScopeGeometryTests" -v minimal --no-restore`
+Expected: PASS — 63 filtered (57 + 6), 0 failed.
+
+- [ ] **Step 5: Wire the accumulated phase into the window**
+
+In `host/DeadAir.App/RecordingIndicatorWindow.xaml.cs`, three edits:
+
+(a) Add two fields after `private double _nebEnergy;`:
+
+```csharp
+    private double _nebPhase;          // accumulated drift phase (voice-speed clock)
+    private long _nebLastT;            // last nebula frame time for dt
+```
+
+(b) In `ShowIndicator`, extend the `_nebEnergy = 0;` line's block:
+
+```csharp
+        _nebEnergy = 0;                 // each recording swells in from calm
+        _nebPhase = 0;
+        _nebLastT = Environment.TickCount64;
+```
+
+(c) In `RenderFrame`'s nebula branch, replace the line
+
+```csharp
+            double tSlow = (now - _showT0) * NebulaDrift;
+```
+
+with
+
+```csharp
+            double dt = Math.Clamp(now - _nebLastT, 0, 100);   // hitch clamp (DeadEye precedent)
+            _nebLastT = now;
+```
+
+and, immediately AFTER the `double enorm = ...` line, insert:
+
+```csharp
+            _nebPhase += dt * NebulaDrift * ScopeGeometry.NebulaPhaseRate(enorm);
+            double tSlow = _nebPhase;
+```
+
+(The haze and strand `BuildStrandPoints` calls keep using `tSlow` unchanged. The lantern else-branch is untouched.)
+
+- [ ] **Step 6: Build + full suite**
+
+Run: `dotnet build "host/DeadAir.App/DeadAir.App.csproj" --no-restore`
+Expected: Build succeeded, 0 errors.
+Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" -v minimal --no-restore`
+Expected: PASS — 141 total (135 + 6), 0 failed.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add host/DeadAir.Core/ScopeGeometry.cs host/DeadAir.Core.Tests/ScopeGeometryTests.cs host/DeadAir.App/RecordingIndicatorWindow.xaml.cs
+git commit -m "feat(host): nebula strands flow with the voice (energy-driven drift rate)"
+```
