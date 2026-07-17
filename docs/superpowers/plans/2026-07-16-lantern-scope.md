@@ -228,7 +228,7 @@ public static class ScopeGeometry
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" --filter "FullyQualifiedName~ScopeGeometryTests" -v minimal`
-Expected: PASS — 25 tests (theories expand), 0 failed.
+Expected: PASS — 28 tests (theories expand), 0 failed.
 
 - [ ] **Step 6: Run the full Core suite (no regressions)**
 
@@ -352,7 +352,7 @@ Append to `ScopeGeometry` in `host/DeadAir.Core/ScopeGeometry.cs`:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" --filter "FullyQualifiedName~ScopeGeometryTests" -v minimal`
-Expected: PASS — 31 tests, 0 failed.
+Expected: PASS — 34 tests, 0 failed.
 
 - [ ] **Step 5: Run the full Core suite**
 
