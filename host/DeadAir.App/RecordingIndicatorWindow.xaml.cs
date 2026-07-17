@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using DeadAir.Core;
 
 namespace DeadAir.App;
@@ -16,6 +17,14 @@ public partial class RecordingIndicatorWindow : Window
     private const double CoreOpacity = 0.95, GlowOpacity = 0.30;
     private const double PipFadeMs = 150.0;
 
+    // Nebula skin (spec 2026-07-17): tamed 3-strand smoke bundle riding the
+    // live waveform + 9px haze understroke; strand 0 is the hot white core.
+    // Constants carried from DeadEye's tamed wispLitStrand pass.
+    private const double StrandOpacity = 0.65, HotOpacity = 1.0, HazeOpacity = 0.05;
+    private const double NebulaAmpPx = 3.0;    // base noise amplitude (screen px) — the tuning dial
+    private const double NebulaDrift = 0.33;   // 3x-slowed drift
+    private const double SeedBase = 3.7, SeedStep = 5.7, HazeSeed = 34.7;
+
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
@@ -26,7 +35,7 @@ public partial class RecordingIndicatorWindow : Window
     private static extern int SetWindowLongW(nint hWnd, int nIndex, int value);
 
     /// <summary>Lantern lifecycle (spec 2026-07-16): ignition sweep on show,
-    /// breathing live trace, retract-then-hide on stop.</summary>
+    /// live trace, retract-then-hide on stop. Shared by both skins.</summary>
     private enum ScopeState { Idle, Igniting, Live, Retracting }
 
     private readonly WaveformRingBuffer _wave = new(ScopeSamples);
@@ -43,12 +52,14 @@ public partial class RecordingIndicatorWindow : Window
     // trace the beam never wrote.
     private double _visibleTo = 1.0;
     private bool _tickHooked;
+    private string _skin = "nebula";  // "nebula" | "lantern" (spec 2026-07-17 default)
 
     public RecordingIndicatorWindow()
     {
         InitializeComponent();
         _dim.Freeze();
         _hot.Freeze();
+        ApplySkinVisibility();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -83,6 +94,28 @@ public partial class RecordingIndicatorWindow : Window
             InterimText.Inlines.Add(new Run(layout.Hot) { Foreground = _hot });
     }
 
+    /// <summary>Select the scope skin. Unknown values fall back to nebula
+    /// (the default) — same degrade-don't-crash posture as the hotkey.</summary>
+    public void SetSkin(string skin)
+    {
+        _skin = skin == "lantern" ? "lantern" : "nebula";
+        ApplySkinVisibility();
+    }
+
+    private bool Nebula => _skin == "nebula";
+
+    private void ApplySkinVisibility()
+    {
+        var neb = Nebula ? Visibility.Visible : Visibility.Collapsed;
+        var lan = Nebula ? Visibility.Collapsed : Visibility.Visible;
+        HazeLine.Visibility = neb;
+        Strand1.Visibility = neb;
+        Strand2.Visibility = neb;
+        StrandHot.Visibility = neb;
+        GlowLine.Visibility = lan;
+        ScopeLine.Visibility = lan;
+    }
+
     public void ShowIndicator()
     {
         _wave.Reset();
@@ -94,10 +127,18 @@ public partial class RecordingIndicatorWindow : Window
         _visibleTo = 0.0;
         ScopeLine.Opacity = CoreOpacity;
         GlowLine.Opacity = GlowOpacity;
+        StrandHot.Opacity = HotOpacity;
+        Strand1.Opacity = StrandOpacity;
+        Strand2.Opacity = StrandOpacity;
+        HazeLine.Opacity = HazeOpacity;
         var empty = new PointCollection();
-        empty.Freeze();   // frozen: safely shared by both polylines
+        empty.Freeze();   // frozen: safely shared across polylines
         ScopeLine.Points = empty;
         GlowLine.Points = empty;
+        StrandHot.Points = empty;
+        Strand1.Points = empty;
+        Strand2.Points = empty;
+        HazeLine.Points = empty;
         BeamPip.Visibility = Visibility.Visible;
         BeamPip.Opacity = 1.0;
         if (!_tickHooked)
@@ -134,7 +175,7 @@ public partial class RecordingIndicatorWindow : Window
     {
         long now = Environment.TickCount64;
         double tState = now - _stateT0;
-        double breathe = ScopeGeometry.Breathe(now - _showT0);
+        double breathe = ScopeGeometry.Breathe(now - _showT0);   // lantern only
 
         switch (_state)
         {
@@ -142,9 +183,7 @@ public partial class RecordingIndicatorWindow : Window
             {
                 double head = ScopeGeometry.IgnitionHead(tState);
                 _visibleTo = head;
-                RenderScope(u => ScopeGeometry.Envelope(u) * breathe
-                                 * ScopeGeometry.IgnitionAmp(u, head),
-                            0.0, head);
+                RenderFrame(now, breathe, head, 0.0, head, 1.0);
                 PlacePip();
                 if (head >= 1)
                 {
@@ -156,7 +195,7 @@ public partial class RecordingIndicatorWindow : Window
             }
             case ScopeState.Live:
             {
-                RenderScope(u => ScopeGeometry.Envelope(u) * breathe, 0.0, 1.0);
+                RenderFrame(now, breathe, 1.0, 0.0, 1.0, 1.0);
                 if (BeamPip.Visibility == Visibility.Visible)
                 {
                     double pip = 1 - tState / PipFadeMs;
@@ -177,10 +216,7 @@ public partial class RecordingIndicatorWindow : Window
                     return;
                 }
                 // Length and alpha reach zero together — no pop (spec).
-                ScopeLine.Opacity = CoreOpacity * rf;
-                GlowLine.Opacity = GlowOpacity * rf;
-                RenderScope(u => ScopeGeometry.Envelope(u) * breathe,
-                            visibleFrom, _visibleTo);
+                RenderFrame(now, breathe, 1.0, visibleFrom, _visibleTo, rf);
                 return;
             }
             default:
@@ -188,22 +224,62 @@ public partial class RecordingIndicatorWindow : Window
         }
     }
 
-    private void RenderScope(Func<double, double> ampAt,
-        double visibleFrom, double visibleTo)
+    /// <summary>One frame for the active skin. head is 1 outside ignition
+    /// (IgnitionAmp then returns 1 for every u); fade is 1 outside retract
+    /// and scales each skin element's base opacity during it.</summary>
+    private void RenderFrame(long now, double breathe, double head,
+        double visibleFrom, double visibleTo, double fade)
     {
-        var raw = ScopeGeometry.BuildPoints(_wave.Values, ScopeWidth, ScopeHeight,
-            ampAt, visibleFrom, visibleTo);
-        var pts = new PointCollection(raw.Length);
-        foreach (var (x, y) in raw) pts.Add(new Point(x, y));
-        pts.Freeze();   // frozen: safely shared by both polylines
-        ScopeLine.Points = pts;
-        GlowLine.Points = pts;
+        if (Nebula)
+        {
+            double tSlow = (now - _showT0) * NebulaDrift;
+            Func<double, double> ampAt = u =>
+                ScopeGeometry.WispEnv(u) * ScopeGeometry.IgnitionAmp(u, head);
+            SetLine(HazeLine, HazeOpacity * fade, ScopeGeometry.BuildNebulaPoints(
+                _wave.Values, ScopeWidth, ScopeHeight, ampAt, tSlow,
+                HazeSeed, 1.0, NebulaAmpPx * 0.7, visibleFrom, visibleTo));
+            for (int s = 0; s < 3; s++)
+            {
+                var line = s == 0 ? StrandHot : s == 1 ? Strand1 : Strand2;
+                double baseA = s == 0 ? HotOpacity : StrandOpacity;
+                SetLine(line, baseA * fade, ScopeGeometry.BuildNebulaPoints(
+                    _wave.Values, ScopeWidth, ScopeHeight, ampAt, tSlow,
+                    SeedBase + s * SeedStep, 0.9 + s * 0.13,
+                    NebulaAmpPx * (0.35 + s * 0.22), visibleFrom, visibleTo));
+            }
+        }
+        else
+        {
+            Func<double, double> ampAt = u =>
+                ScopeGeometry.Envelope(u) * breathe
+                * ScopeGeometry.IgnitionAmp(u, head);
+            var raw = ScopeGeometry.BuildPoints(_wave.Values, ScopeWidth,
+                ScopeHeight, ampAt, visibleFrom, visibleTo);
+            var pts = new PointCollection(raw.Length);
+            foreach (var (x, y) in raw) pts.Add(new Point(x, y));
+            pts.Freeze();   // frozen: safely shared by both polylines
+            ScopeLine.Opacity = CoreOpacity * fade;
+            GlowLine.Opacity = GlowOpacity * fade;
+            ScopeLine.Points = pts;
+            GlowLine.Points = pts;
+        }
     }
 
-    /// <summary>Center the pip on the rightmost drawn point (the beam head).</summary>
+    private static void SetLine(Polyline line, double opacity,
+        (double X, double Y)[] raw)
+    {
+        var pts = new PointCollection(raw.Length);
+        foreach (var (x, y) in raw) pts.Add(new Point(x, y));
+        pts.Freeze();
+        line.Opacity = opacity;
+        line.Points = pts;
+    }
+
+    /// <summary>Center the pip on the rightmost drawn point (the beam head)
+    /// of the active skin's primary line.</summary>
     private void PlacePip()
     {
-        var pts = ScopeLine.Points;
+        var pts = (Nebula ? StrandHot : ScopeLine).Points;
         double x = 0, y = ScopeHeight / 2.0;
         if (pts.Count > 0)
         {
