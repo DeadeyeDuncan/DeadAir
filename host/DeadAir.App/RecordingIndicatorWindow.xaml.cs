@@ -24,7 +24,7 @@ public partial class RecordingIndicatorWindow : Window
     private const double StrandOpacity = 0.34, HotOpacity = 0.62, HazeOpacity = 0.05;
     private const double NebulaDrift = 0.33;                 // 3x-slowed drift
     private const double SeedBase = 3.7, SeedStep = 5.7, HazeSeed = 34.7;
-    private const int NebulaSegs = 16, HazeSegs = 8;         // DeadEye segment counts (smooth at low sampling)
+    private const int NebulaSegs = 32, HazeSegs = 16;        // 2x DeadEye's 16/8: renders the noise's high-freq term (~80px waves) the pill was flattening — user asked for more wiggle
     private const int NebulaStrands = 6;
     // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
     private const double EnergyAttack = 0.20, EnergyRelease = 0.05, EnergyGain = 3.0;
