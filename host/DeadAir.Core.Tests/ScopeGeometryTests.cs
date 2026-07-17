@@ -215,57 +215,77 @@ public class ScopeGeometryTests
         => Assert.NotEqual(ScopeGeometry.WispNoff(0.5, 0, 3.7, 1.0),
                            ScopeGeometry.WispNoff(0.5, 50000, 3.7, 1.0));
 
-    // ---- BuildNebulaPoints: waveform + enveloped noise, BuildPoints window semantics ----
+    // ---- MeanAbs: mean |sample| over the buffer (the sole audio->visual coupling) ----
 
     [Fact]
-    public void BuildNebulaPoints_ZeroNoiseZeroSamplesIsMidline()
+    public void MeanAbs_EmptyIsZero()
+        => Assert.Equal(0.0, ScopeGeometry.MeanAbs(Array.Empty<double>()));
+
+    [Fact]
+    public void MeanAbs_AllZeroIsZero()
+        => Assert.Equal(0.0, ScopeGeometry.MeanAbs(new double[8]));
+
+    [Fact]
+    public void MeanAbs_AlternatingHalfMagnitudeIsHalf()
+        => Assert.Equal(0.5, ScopeGeometry.MeanAbs(new[] { -0.5, 0.5, -0.5, 0.5 }), 12);
+
+    [Fact]
+    public void MeanAbs_SingleValueIsItsMagnitude()
+        => Assert.Equal(0.8, ScopeGeometry.MeanAbs(new[] { -0.8 }), 12);
+
+    // ---- BuildStrandPoints: smooth wisp strand along the midline, NO PCM spine ----
+
+    [Fact]
+    public void BuildStrandPoints_EmptyWhenSegsBelowOne()
+        => Assert.Empty(ScopeGeometry.BuildStrandPoints(296, 40, 0, 10, 0, 3.7, 1.0, 1.0));
+
+    [Fact]
+    public void BuildStrandPoints_EmptyWhenWindowNonPositive()
+        => Assert.Empty(ScopeGeometry.BuildStrandPoints(296, 40, 16, 10, 0, 3.7, 1.0, 1.0, 0.5, 0.5));
+
+    [Fact]
+    public void BuildStrandPoints_ReturnsSegsPlusOnePoints()
+        => Assert.Equal(17, ScopeGeometry.BuildStrandPoints(296, 40, 16, 10, 0, 3.7, 1.0, 1.0).Length);
+
+    [Fact]
+    public void BuildStrandPoints_EndpointXIsExactTrueU()
     {
-        var pts = ScopeGeometry.BuildNebulaPoints(new double[5], 100, 40,
-            _ => 1.0, 1000, 3.7, 1.0, 0.0);
-        Assert.Equal(5, pts.Length);
-        Assert.All(pts, p => Assert.Equal(20.0, p.Y, 12));
+        var p = ScopeGeometry.BuildStrandPoints(296, 40, 16, 10, 0, 3.7, 1.0, 1.0, 0.25, 0.75);
+        Assert.Equal(0.25 * 296, p[0].X, 12);
+        Assert.Equal(0.75 * 296, p[16].X, 12);
     }
 
     [Fact]
-    public void BuildNebulaPoints_NoiseBoundedByAmpTimesEnv()
+    public void BuildStrandPoints_FullWindowEndpointsPinnedToMidline()
     {
-        var pts = ScopeGeometry.BuildNebulaPoints(new double[5], 100, 40,
-            _ => 1.0, 1000, 3.7, 1.0, 2.0);
-        for (int i = 0; i < pts.Length; i++)
+        var p = ScopeGeometry.BuildStrandPoints(296, 40, 16, 10, 0, 3.7, 1.0, 1.0);
+        Assert.Equal(20.0, p[0].Y, 12);    // WispEnv(0) == 0
+        Assert.Equal(20.0, p[16].Y, 12);   // WispEnv(1) == 0
+    }
+
+    [Fact]
+    public void BuildStrandPoints_OffsetBoundedByAmp()
+    {
+        var p = ScopeGeometry.BuildStrandPoints(296, 40, 16, 10, 1234, 9.4, 1.03, 1.0);
+        Assert.All(p, q => Assert.True(Math.Abs(q.Y - 20.0) <= 10.0 + 1e-9));
+    }
+
+    [Fact]
+    public void BuildStrandPoints_StaysWithinClipAtMaxAmp()
+    {
+        // A=13.0 (loud), outer strand factor 1.45 -> amp 18.85; must never clip the 40px canvas.
+        var p = ScopeGeometry.BuildStrandPoints(296, 40, 16, 13.0 * 1.45, 777, 32.2, 1.55, 1.0);
+        Assert.All(p, q => Assert.True(Math.Abs(q.Y - 20.0) < 19.45));
+    }
+
+    [Fact]
+    public void BuildStrandPoints_IgnitionGatesPointsBeyondHead()
+    {
+        var p = ScopeGeometry.BuildStrandPoints(296, 40, 16, 10, 0, 3.7, 1.0, 0.5); // head 0.5
+        for (int i = 0; i < p.Length; i++)
         {
-            double u = i / 4.0;
-            Assert.True(Math.Abs(pts[i].Y - 20.0)
-                <= 2.0 * ScopeGeometry.WispEnv(u) + 1e-9,
-                $"point {i} exceeded the noise envelope");
+            double u = (double)i / 16;
+            if (u > 0.5) Assert.Equal(20.0, p[i].Y, 12);   // IgnitionAmp(u>head) == 0
         }
     }
-
-    [Fact]
-    public void BuildNebulaPoints_NoiseVisibleInInterior()
-    {
-        var pts = ScopeGeometry.BuildNebulaPoints(new double[5], 100, 40,
-            _ => 1.0, 1000, 3.7, 1.0, 2.0);
-        Assert.Contains(pts, p => Math.Abs(p.Y - 20.0) > 0.001);
-    }
-
-    [Fact]
-    public void BuildNebulaPoints_XStaysFixedUnderWindow()
-    {
-        var pts = ScopeGeometry.BuildNebulaPoints(Bump, 100, 40,
-            _ => 1.0, 0, 3.7, 1.0, 0.0, visibleFrom: 0.5);
-        Assert.Equal(new[] { 50.0, 75.0, 100.0 }, pts.Select(p => p.X).ToArray());
-    }
-
-    [Fact]
-    public void BuildNebulaPoints_VisibleToOmitsBeyondHead()
-    {
-        var pts = ScopeGeometry.BuildNebulaPoints(Bump, 100, 40,
-            _ => 1.0, 0, 3.7, 1.0, 0.0, visibleTo: 0.5);
-        Assert.Equal(new[] { 0.0, 25.0, 50.0 }, pts.Select(p => p.X).ToArray());
-    }
-
-    [Fact]
-    public void BuildNebulaPoints_FewerThanTwoSamplesIsEmpty()
-        => Assert.Empty(ScopeGeometry.BuildNebulaPoints(new[] { 0.5 }, 100, 40,
-            _ => 1.0, 0, 3.7, 1.0, 1.0));
 }
