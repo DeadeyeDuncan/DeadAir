@@ -16,6 +16,7 @@ public sealed class AppConfig
     public List<string> Dictionary { get; set; } = new();
     public string Mic { get; set; } = "default";
     public InjectConfig Inject { get; set; } = new();
+    public PillConfig Pill { get; set; } = new();
     public SidecarLaunchConfig Sidecar { get; set; } = new();
 }
 
@@ -81,6 +82,11 @@ public sealed class InjectConfig
     public string Method { get; set; } = "auto"; // auto | clipboard | sendinput
     public string PasteHotkey { get; set; } = "Ctrl+V";
     public int RestoreClipboardDelayMs { get; set; } = 150;
+}
+
+public sealed class PillConfig
+{
+    public string Skin { get; set; } = "nebula"; // nebula | lantern (host-only, never sent to the sidecar)
 }
 
 public sealed class SidecarLaunchConfig

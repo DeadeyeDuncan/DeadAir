@@ -24,6 +24,12 @@
                 <ComboBoxItem Content="Polished"/>
             </ComboBox>
 
+            <TextBlock FontWeight="Bold" Text="Scope skin"/>
+            <ComboBox x:Name="SkinBox" Margin="0,4,0,12">
+                <ComboBoxItem Content="nebula"/>
+                <ComboBoxItem Content="lantern"/>
+            </ComboBox>
+
             <TextBlock FontWeight="Bold"
                        Text="Custom dictionary (one term per line)"/>
             <TextBox x:Name="DictionaryBox" Margin="0,4,0,12" Height="120"

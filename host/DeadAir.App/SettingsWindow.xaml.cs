@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
         Select(EngineBox, _config.Asr.Engine);
         OllamaModelBox.Text = _config.Ollama.Model;
         Select(ModeBox, _config.Cleanup.Mode.ToString());
+        Select(SkinBox, _config.Pill.Skin);
         DictionaryBox.Text = string.Join(Environment.NewLine,
             _config.Dictionary);
     }
@@ -43,6 +44,7 @@ public partial class SettingsWindow : Window
         _config.Asr.Engine = Selected(EngineBox);
         _config.Ollama.Model = OllamaModelBox.Text.Trim();
         _config.Cleanup.Mode = Enum.Parse<CleanupMode>(Selected(ModeBox));
+        _config.Pill.Skin = Selected(SkinBox);
         _config.Dictionary = DictionaryBox.Text
             .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries |
                                         StringSplitOptions.TrimEntries)
