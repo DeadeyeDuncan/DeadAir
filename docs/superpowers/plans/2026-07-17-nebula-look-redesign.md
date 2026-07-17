@@ -687,3 +687,204 @@ Expected: PASS — 141 total (135 + 6), 0 failed.
 git add host/DeadAir.Core/ScopeGeometry.cs host/DeadAir.Core.Tests/ScopeGeometryTests.cs host/DeadAir.App/RecordingIndicatorWindow.xaml.cs
 git commit -m "feat(host): nebula strands flow with the voice (energy-driven drift rate)"
 ```
+
+---
+
+### Task 13: Nebula tuning dials in Settings (user request at the tuning loop)
+
+**User request:** expose the three knobs iterated on during smoke — fan sensitivity, wiggle depth, wiggle speed — as Settings sliders (DeadEye "live dials" pattern: persisted, range-clamped at apply, live on save).
+
+**Context (post-T12 state of the window):** the smoke-tuning loop added, inline on the branch (commits `4e538a6`, `fa746aa`, `c61166b`): `NebulaSegs=48, HazeSegs=16`; consts `TurbSpan = 0.6` and `TurbScrollRate = 0.00035`; `BuildStrandPoints` gained optional `turb` and `turbScroll` params; the strand call ends with `TurbSpan * enorm, tSlow * TurbScrollRate));`. This task replaces the `EnergyGain` and `TurbSpan` consts with fields fed from config and multiplies the scroll by a speed factor.
+
+**Files:**
+- Modify: `host/DeadAir.Core/Config/AppConfig.cs` (three PillConfig fields)
+- Modify: `host/DeadAir.App/SettingsWindow.xaml` + `.xaml.cs` (three sliders)
+- Modify: `host/DeadAir.App/App.xaml.cs` (apply tuning at startup + on save)
+- Modify: `host/DeadAir.App/RecordingIndicatorWindow.xaml.cs` (consts → fields + ApplyPillTuning)
+- Test: `host/DeadAir.Core.Tests/PillConfigTests.cs` (defaults + round-trip)
+
+**Interfaces:**
+- Produces: `PillConfig` gains `double FanGain = 3.0`, `double Wiggle = 0.6`, `double WiggleSpeed = 1.0`; `RecordingIndicatorWindow` gains `public void ApplyPillTuning(PillConfig pill)` (clamps: FanGain 0.5–8, Wiggle 0–1.5, WiggleSpeed 0–4).
+
+- [ ] **Step 1: Write the failing tests**
+
+Append inside `PillConfigTests` in `host/DeadAir.Core.Tests/PillConfigTests.cs`:
+
+```csharp
+    [Fact]
+    public void Default_Tuning_MatchesShippedConstants()
+    {
+        var p = new AppConfig().Pill;
+        Assert.Equal(3.0, p.FanGain);
+        Assert.Equal(0.6, p.Wiggle);
+        Assert.Equal(1.0, p.WiggleSpeed);
+    }
+
+    [Fact]
+    public void Tuning_RoundTripsThroughJson()
+    {
+        var cfg = new AppConfig();
+        cfg.Pill.FanGain = 5.5;
+        cfg.Pill.Wiggle = 1.2;
+        cfg.Pill.WiggleSpeed = 2.5;
+        var back = JsonSerializer.Deserialize<AppConfig>(
+            JsonSerializer.Serialize(cfg))!;
+        Assert.Equal(5.5, back.Pill.FanGain);
+        Assert.Equal(1.2, back.Pill.Wiggle);
+        Assert.Equal(2.5, back.Pill.WiggleSpeed);
+    }
+```
+
+- [ ] **Step 2: RED**
+
+Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" --filter "FullyQualifiedName~PillConfigTests" -v minimal --no-restore`
+Expected: BUILD FAILURE — `error CS1061: 'PillConfig' does not contain a definition for 'FanGain'`.
+
+- [ ] **Step 3: Extend PillConfig**
+
+In `host/DeadAir.Core/Config/AppConfig.cs`, replace the `PillConfig` class with:
+
+```csharp
+public sealed class PillConfig
+{
+    public string Skin { get; set; } = "nebula"; // nebula | lantern (host-only, never sent to the sidecar)
+    // Nebula dials (host-only). Window clamps at apply: 0.5-8 / 0-1.5 / 0-4.
+    public double FanGain { get; set; } = 3.0;      // voice sensitivity of the fan
+    public double Wiggle { get; set; } = 0.6;       // turbulence depth at full voice
+    public double WiggleSpeed { get; set; } = 1.0;  // traveling-wave speed multiplier
+}
+```
+
+- [ ] **Step 4: GREEN**
+
+Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" --filter "FullyQualifiedName~PillConfigTests" -v minimal --no-restore`
+Expected: PASS — 5 tests, 0 failed.
+
+- [ ] **Step 5: Window — consts → fields + ApplyPillTuning**
+
+In `host/DeadAir.App/RecordingIndicatorWindow.xaml.cs`:
+
+(a) DELETE the `EnergyGain` part of the energy consts line and the `TurbSpan` const line; the constants region becomes:
+
+```csharp
+    // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
+    private const double EnergyAttack = 0.20, EnergyRelease = 0.05;
+    private const double SpreadFloor = 2.5, SpreadSpan = 10.5;   // fan width A in [2.5, 13.0] px
+```
+
+and keep `TurbScrollRate` where it is (base rate; the dial multiplies it).
+
+(b) Add fields after `private long _nebLastT;`:
+
+```csharp
+    // Nebula dials (config-backed via ApplyPillTuning; defaults = shipped constants).
+    private double _fanGain = 3.0, _turbSpan = 0.6, _wiggleSpeed = 1.0;
+```
+
+(c) Add after `SetSkin`:
+
+```csharp
+    /// <summary>Apply the nebula tuning dials from config, range-clamped
+    /// (degrade-don't-crash: hand-edited config lands in the legal range).</summary>
+    public void ApplyPillTuning(PillConfig pill)
+    {
+        _fanGain = Math.Clamp(pill.FanGain, 0.5, 8.0);
+        _turbSpan = Math.Clamp(pill.Wiggle, 0.0, 1.5);
+        _wiggleSpeed = Math.Clamp(pill.WiggleSpeed, 0.0, 4.0);
+    }
+```
+
+(add `using DeadAir.Core.Config;` to the usings)
+
+(d) In `RenderFrame`'s nebula branch replace `EnergyGain` with `_fanGain`, `TurbSpan * enorm` with `_turbSpan * enorm`, and `tSlow * TurbScrollRate` with `tSlow * TurbScrollRate * _wiggleSpeed`.
+
+- [ ] **Step 6: Settings sliders**
+
+In `host/DeadAir.App/SettingsWindow.xaml`, insert after the `SkinBox` ComboBox block:
+
+```xml
+            <TextBlock FontWeight="Bold" Text="Nebula fan sensitivity"/>
+            <DockPanel Margin="0,4,0,12">
+                <TextBlock x:Name="FanGainValue" DockPanel.Dock="Right" Width="36"
+                           TextAlignment="Right"/>
+                <Slider x:Name="FanGainSlider" Minimum="0.5" Maximum="8"
+                        TickFrequency="0.1" IsSnapToTickEnabled="True"
+                        ValueChanged="OnTuningChanged"/>
+            </DockPanel>
+
+            <TextBlock FontWeight="Bold" Text="Nebula wiggle"/>
+            <DockPanel Margin="0,4,0,12">
+                <TextBlock x:Name="WiggleValue" DockPanel.Dock="Right" Width="36"
+                           TextAlignment="Right"/>
+                <Slider x:Name="WiggleSlider" Minimum="0" Maximum="1.5"
+                        TickFrequency="0.05" IsSnapToTickEnabled="True"
+                        ValueChanged="OnTuningChanged"/>
+            </DockPanel>
+
+            <TextBlock FontWeight="Bold" Text="Nebula wiggle speed"/>
+            <DockPanel Margin="0,4,0,12">
+                <TextBlock x:Name="WiggleSpeedValue" DockPanel.Dock="Right" Width="36"
+                           TextAlignment="Right"/>
+                <Slider x:Name="WiggleSpeedSlider" Minimum="0" Maximum="4"
+                        TickFrequency="0.1" IsSnapToTickEnabled="True"
+                        ValueChanged="OnTuningChanged"/>
+            </DockPanel>
+```
+
+In `host/DeadAir.App/SettingsWindow.xaml.cs`:
+
+(a) In the constructor after `Select(SkinBox, _config.Pill.Skin);` add:
+
+```csharp
+        FanGainSlider.Value = Math.Clamp(_config.Pill.FanGain, 0.5, 8.0);
+        WiggleSlider.Value = Math.Clamp(_config.Pill.Wiggle, 0.0, 1.5);
+        WiggleSpeedSlider.Value = Math.Clamp(_config.Pill.WiggleSpeed, 0.0, 4.0);
+        UpdateTuningLabels();
+```
+
+(b) Add the handler + label refresh methods:
+
+```csharp
+    private void OnTuningChanged(object sender,
+        RoutedPropertyChangedEventArgs<double> e) => UpdateTuningLabels();
+
+    private void UpdateTuningLabels()
+    {
+        // ValueChanged can fire during InitializeComponent before the labels exist.
+        if (FanGainValue is null || WiggleValue is null || WiggleSpeedValue is null)
+            return;
+        FanGainValue.Text = FanGainSlider.Value.ToString("0.0");
+        WiggleValue.Text = WiggleSlider.Value.ToString("0.00");
+        WiggleSpeedValue.Text = WiggleSpeedSlider.Value.ToString("0.0");
+    }
+```
+
+(c) In `OnSave` after `_config.Pill.Skin = Selected(SkinBox);` add:
+
+```csharp
+        _config.Pill.FanGain = FanGainSlider.Value;
+        _config.Pill.Wiggle = WiggleSlider.Value;
+        _config.Pill.WiggleSpeed = WiggleSpeedSlider.Value;
+```
+
+- [ ] **Step 7: App wiring**
+
+In `host/DeadAir.App/App.xaml.cs`, immediately after BOTH existing `_indicator.SetSkin(_config.Pill.Skin);` call sites (OnStartup and OnSettingsSaved), add:
+
+```csharp
+        _indicator.ApplyPillTuning(_config.Pill);
+```
+
+- [ ] **Step 8: Build + full suite**
+
+Run: `dotnet build "host/DeadAir.App/DeadAir.App.csproj" --no-restore`
+Expected: Build succeeded, 0 errors.
+Run: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" -v minimal --no-restore`
+Expected: PASS — 151 total, 0 failed.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add host/DeadAir.Core/Config/AppConfig.cs host/DeadAir.Core.Tests/PillConfigTests.cs host/DeadAir.App/SettingsWindow.xaml host/DeadAir.App/SettingsWindow.xaml.cs host/DeadAir.App/App.xaml.cs host/DeadAir.App/RecordingIndicatorWindow.xaml.cs
+git commit -m "feat(host): nebula tuning dials in Settings (fan sensitivity, wiggle, wiggle speed)"
+```
