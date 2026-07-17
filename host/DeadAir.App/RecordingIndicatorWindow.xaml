@@ -17,36 +17,36 @@
                      glow under a thin bright core; both share the same Points.
                      WPF has no additive compositing for strokes — layered
                      translucent strokes approximate the canvas 'lighter' pass. -->
-                <Polyline x:Name="GlowLine" Stroke="#FFB454" StrokeThickness="3.5"
+                <Polyline x:Name="GlowLine" Stroke="#C11D12" StrokeThickness="3.5"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.30"/>
-                <Polyline x:Name="ScopeLine" Stroke="#FFC77F" StrokeThickness="1.3"
+                <Polyline x:Name="ScopeLine" Stroke="#D1564D" StrokeThickness="1.3"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.95"/>
                 <!-- Nebula skin (spec 2026-07-17 redesign): 9px haze under a
                      6-strand DeadEye connection bundle; StrandHot is the white
                      core. Only one skin's elements are Visible (SetSkin). -->
-                <Polyline x:Name="HazeLine" Stroke="#EEDAC2" StrokeThickness="9"
+                <Polyline x:Name="HazeLine" Stroke="#D8A39A" StrokeThickness="9"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.05"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand1" Stroke="#EEDAC2" StrokeThickness="0.85"
+                <Polyline x:Name="Strand1" Stroke="#D8A39A" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand2" Stroke="#EEDAC2" StrokeThickness="0.85"
+                <Polyline x:Name="Strand2" Stroke="#D8A39A" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand3" Stroke="#EEDAC2" StrokeThickness="0.85"
+                <Polyline x:Name="Strand3" Stroke="#D8A39A" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand4" Stroke="#EEDAC2" StrokeThickness="0.85"
+                <Polyline x:Name="Strand4" Stroke="#D8A39A" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand5" Stroke="#EEDAC2" StrokeThickness="0.85"
+                <Polyline x:Name="Strand5" Stroke="#D8A39A" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
@@ -59,8 +59,8 @@
                     <Ellipse.Fill>
                         <RadialGradientBrush>
                             <GradientStop Color="#FFFFF9F0" Offset="0"/>
-                            <GradientStop Color="#CCFFB454" Offset="0.45"/>
-                            <GradientStop Color="#00FFB454" Offset="1"/>
+                            <GradientStop Color="#CCC11D12" Offset="0.45"/>
+                            <GradientStop Color="#00C11D12" Offset="1"/>
                         </RadialGradientBrush>
                     </Ellipse.Fill>
                 </Ellipse>

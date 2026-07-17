@@ -24,7 +24,7 @@ and lifecycle-only change in the host pill.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Treatment depth | **Full lifecycle** (glow + taper + breathing + ignition/retract) | User picked the complete Lantern identity, not just the static look. |
-| Color | **Warm lantern tone** — base `#FFB454` | User picked DeadEye's warm ignition family over DeadAir's cyan. Base matches DeadEye's warm accent (`--warn`/gaming `#ffb454`, warm dust `rgb(255,214,170)`). |
+| Color | **Blood-red lantern tone** — base `#C11D12` | Pivoted 2026-07-17 to DeadEye's red/black/grey rebrand: blood red `#c11d12` is THE accent (DeadEye spec `2026-07-17-deadeye-red-theme-design.md`). Original port used DeadEye's warm amber family (`#FFB454`, old `--warn`/gaming). |
 | Implementation | **A — multi-Polyline phosphor** | Two strokes is literally what the canvas source does (wide soft pass under bright core). No shader effects, no new deps; B (DropShadowEffect) rasterizes per frame and has a fixed glow radius; C (custom additive visual/Skia) is overkill for 296×40. |
 | Interim text | **Unchanged** (stays cyan) | Scope-only restyle per user. Warming the text is a possible follow-up. |
 
@@ -32,8 +32,8 @@ and lifecycle-only change in the host pill.
 
 | Element | Value | Source |
 |---|---|---|
-| Core stroke | `#FFC77F` ≈ `mix(#FFB454, #ffffff, 0.25)`, 1.3 px | Lantern `colLit = lighten(edgeCol, 0.25)`, core 1.2 px |
-| Glow stroke | `#FFB454` at ~0.30 opacity, 3.5 px, under the core | Lantern phosphor pass: 3 px at 0.32× core alpha |
+| Core stroke | `#D1564D` ≈ `mix(#C11D12, #ffffff, 0.25)`, 1.3 px | Lantern `colLit = lighten(edgeCol, 0.25)`, core 1.2 px |
+| Glow stroke | `#C11D12` at ~0.30 opacity, 3.5 px, under the core | Lantern phosphor pass: 3 px at 0.32× core alpha |
 | Beam pip | `#FFF9F0` small ellipse + faded halo | Lantern hot-core white |
 | Endpoint taper | amplitude × `sin(π·u)`, `u` = x/width | Lantern trace envelope |
 | Breathing | amplitude × `(0.72 + 0.28·sin(t/900))`, t in ms | Lantern breathing envelope, 900 ms period (single trace → phase 0) |
@@ -70,8 +70,8 @@ Static helpers, unit-testable, same Core-holds-the-logic pattern as
 
 ### `RecordingIndicatorWindow` (App)
 
-- **XAML:** add `GlowLine` Polyline (3.5 px, `#FFB454`, opacity 0.30,
-  round join) *under* `ScopeLine`; restyle `ScopeLine` to `#FFC77F`, 1.3 px;
+- **XAML:** add `GlowLine` Polyline (3.5 px, `#C11D12`, opacity 0.30,
+  round join) *under* `ScopeLine`; restyle `ScopeLine` to `#D1564D`, 1.3 px;
   add `BeamPip` Ellipse (`#FFF9F0`, ~5 px, hidden at rest). Both polylines get
   the same `Points`; pip is positioned by Canvas.Left/Top.
 - **State machine:** `Idle → Igniting(300 ms) → Live → Retracting(450 ms) →
