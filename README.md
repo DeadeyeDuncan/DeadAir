@@ -43,8 +43,11 @@ of seconds.
   never lost.
 - **Live pill overlay (v0.2)** — while you hold the key, a small window shows a
   scrolling PCM oscilloscope and a self-correcting interim transcript. The
-  interim text is a preview only and is never injected; the authoritative decode
-  happens on key-up. (Waveform on all engines; live text is GPU-only.)
+  scope wears DeadEye's Lantern trace look: a warm phosphor double-stroke that
+  ignites left→right on press, breathes while you speak, and retracts away on
+  release. The interim text is a preview only and is never injected; the
+  authoritative decode happens on key-up. (Waveform on all engines; live text
+  is GPU-only.)
 - **Custom dictionary** — user terms bias both Whisper (as `initial_prompt`) and
   the LLM ("preserve these exactly").
 - **System tray + settings** — mode toggle, ASR engine/model, Ollama model+URL,
