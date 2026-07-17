@@ -23,9 +23,9 @@
                 <Polyline x:Name="ScopeLine" Stroke="#FFC77F" StrokeThickness="1.3"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.95"/>
-                <!-- Nebula skin (spec 2026-07-17): 9px haze under a tamed
-                     3-strand bundle; StrandHot is the white core. Only one
-                     skin's elements are Visible at a time (SetSkin). -->
+                <!-- Nebula skin (spec 2026-07-17 redesign): 9px haze under a
+                     6-strand DeadEye connection bundle; StrandHot is the white
+                     core. Only one skin's elements are Visible (SetSkin). -->
                 <Polyline x:Name="HazeLine" Stroke="#EEDAC2" StrokeThickness="9"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.05"
