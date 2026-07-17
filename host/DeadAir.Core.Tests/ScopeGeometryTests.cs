@@ -167,4 +167,105 @@ public class ScopeGeometryTests
         Assert.Empty(ScopeGeometry.BuildPoints(Array.Empty<double>(), 100, 40, _ => 1.0));
         Assert.Empty(ScopeGeometry.BuildPoints(new[] { 0.7 }, 100, 40, _ => 1.0));
     }
+
+    // ---- WispEnv: nebula strand envelope sin(pi*u)^0.75, exact-zero endpoints ----
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(1.0)]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void WispEnv_IsExactlyZeroAtAndOutsideEndpoints(double u)
+        => Assert.Equal(0.0, ScopeGeometry.WispEnv(u));
+
+    [Fact]
+    public void WispEnv_PeaksAtMidpoint()
+        => Assert.Equal(1.0, ScopeGeometry.WispEnv(0.5), 12);
+
+    [Fact]
+    public void WispEnv_IsSymmetric()
+        => Assert.Equal(ScopeGeometry.WispEnv(0.25), ScopeGeometry.WispEnv(0.75), 12);
+
+    [Fact]
+    public void WispEnv_QuarterPointMatchesPow()
+        => Assert.Equal(0.7711, ScopeGeometry.WispEnv(0.25), 4);
+
+    // ---- WispNoff: three layered sines normalized to [-1, 1] ----
+
+    [Fact]
+    public void WispNoff_StaysBounded()
+    {
+        for (double u = 0; u <= 1.0001; u += 0.03)
+            for (double t = 0; t < 60000; t += 1700)
+                Assert.InRange(ScopeGeometry.WispNoff(u, t, 3.7, 1.0), -1.0, 1.0);
+    }
+
+    [Fact]
+    public void WispNoff_IsDeterministic()
+        => Assert.Equal(ScopeGeometry.WispNoff(0.4, 1234, 9.4, 1.03),
+                        ScopeGeometry.WispNoff(0.4, 1234, 9.4, 1.03));
+
+    [Fact]
+    public void WispNoff_SeedChangesStrand()
+        => Assert.NotEqual(ScopeGeometry.WispNoff(0.5, 1000, 3.7, 1.0),
+                           ScopeGeometry.WispNoff(0.5, 1000, 9.4, 1.0));
+
+    [Fact]
+    public void WispNoff_DriftsOverTime()
+        => Assert.NotEqual(ScopeGeometry.WispNoff(0.5, 0, 3.7, 1.0),
+                           ScopeGeometry.WispNoff(0.5, 50000, 3.7, 1.0));
+
+    // ---- BuildNebulaPoints: waveform + enveloped noise, BuildPoints window semantics ----
+
+    [Fact]
+    public void BuildNebulaPoints_ZeroNoiseZeroSamplesIsMidline()
+    {
+        var pts = ScopeGeometry.BuildNebulaPoints(new double[5], 100, 40,
+            _ => 1.0, 1000, 3.7, 1.0, 0.0);
+        Assert.Equal(5, pts.Length);
+        Assert.All(pts, p => Assert.Equal(20.0, p.Y, 12));
+    }
+
+    [Fact]
+    public void BuildNebulaPoints_NoiseBoundedByAmpTimesEnv()
+    {
+        var pts = ScopeGeometry.BuildNebulaPoints(new double[5], 100, 40,
+            _ => 1.0, 1000, 3.7, 1.0, 2.0);
+        for (int i = 0; i < pts.Length; i++)
+        {
+            double u = i / 4.0;
+            Assert.True(Math.Abs(pts[i].Y - 20.0)
+                <= 2.0 * ScopeGeometry.WispEnv(u) + 1e-9,
+                $"point {i} exceeded the noise envelope");
+        }
+    }
+
+    [Fact]
+    public void BuildNebulaPoints_NoiseVisibleInInterior()
+    {
+        var pts = ScopeGeometry.BuildNebulaPoints(new double[5], 100, 40,
+            _ => 1.0, 1000, 3.7, 1.0, 2.0);
+        Assert.Contains(pts, p => Math.Abs(p.Y - 20.0) > 0.001);
+    }
+
+    [Fact]
+    public void BuildNebulaPoints_XStaysFixedUnderWindow()
+    {
+        var pts = ScopeGeometry.BuildNebulaPoints(Bump, 100, 40,
+            _ => 1.0, 0, 3.7, 1.0, 0.0, visibleFrom: 0.5);
+        Assert.Equal(new[] { 50.0, 75.0, 100.0 }, pts.Select(p => p.X).ToArray());
+    }
+
+    [Fact]
+    public void BuildNebulaPoints_VisibleToOmitsBeyondHead()
+    {
+        var pts = ScopeGeometry.BuildNebulaPoints(Bump, 100, 40,
+            _ => 1.0, 0, 3.7, 1.0, 0.0, visibleTo: 0.5);
+        Assert.Equal(new[] { 0.0, 25.0, 50.0 }, pts.Select(p => p.X).ToArray());
+    }
+
+    [Fact]
+    public void BuildNebulaPoints_FewerThanTwoSamplesIsEmpty()
+        => Assert.Empty(ScopeGeometry.BuildNebulaPoints(new[] { 0.5 }, 100, 40,
+            _ => 1.0, 0, 3.7, 1.0, 1.0));
 }
