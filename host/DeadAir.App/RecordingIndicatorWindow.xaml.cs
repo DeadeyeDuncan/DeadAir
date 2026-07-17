@@ -26,6 +26,7 @@ public partial class RecordingIndicatorWindow : Window
     private const double SeedBase = 3.7, SeedStep = 5.7, HazeSeed = 34.7;
     private const int NebulaSegs = 48, HazeSegs = 16;        // 48 renders the voice-gated 2u turbulence octave (~40px waves); haze stays calm at 16
     private const double TurbSpan = 0.6;                     // turbulence mix at full voice (0 at silence)
+    private const double TurbScrollRate = 0.00035;           // u per phase-ms: octave crosses ~1/3 of the pill per second at full voice
     private const int NebulaStrands = 6;
     // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
     private const double EnergyAttack = 0.20, EnergyRelease = 0.05, EnergyGain = 3.0;
@@ -261,7 +262,8 @@ public partial class RecordingIndicatorWindow : Window
                     ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, NebulaSegs,
                         a * (0.35 + s * 0.22), tSlow, SeedBase + s * SeedStep,
                         0.9 + s * 0.13, head, visibleFrom, visibleTo,
-                        TurbSpan * enorm));   // voice-gated wiggle; haze stays calm
+                        TurbSpan * enorm,     // voice-gated wiggle; haze stays calm
+                        tSlow * TurbScrollRate));   // traveling wave — scroll speed rides the voice-rated clock
             }
         }
         else
