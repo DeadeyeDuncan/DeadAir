@@ -17,13 +17,18 @@ public partial class RecordingIndicatorWindow : Window
     private const double CoreOpacity = 0.95, GlowOpacity = 0.30;
     private const double PipFadeMs = 150.0;
 
-    // Nebula skin (spec 2026-07-17): tamed 3-strand smoke bundle riding the
-    // live waveform + 9px haze understroke; strand 0 is the hot white core.
-    // Constants carried from DeadEye's tamed wispLitStrand pass.
-    private const double StrandOpacity = 0.65, HotOpacity = 1.0, HazeOpacity = 0.05;
-    private const double NebulaAmpPx = 3.0;    // base noise amplitude (screen px) — the tuning dial
-    private const double NebulaDrift = 0.33;   // 3x-slowed drift
+    // Nebula skin (spec 2026-07-17, redesign amendment): a faithful DeadEye
+    // connection-strand port — 6 smooth wisp strands + a 9px haze understroke
+    // drawn along the midline (NO PCM spine). Mic loudness opens/closes the fan
+    // width and brightness. Ladders carried verbatim from DeadEye's wispLitStrand.
+    private const double StrandOpacity = 0.34, HotOpacity = 0.62, HazeOpacity = 0.05;
+    private const double NebulaDrift = 0.33;                 // 3x-slowed drift
     private const double SeedBase = 3.7, SeedStep = 5.7, HazeSeed = 34.7;
+    private const int NebulaSegs = 16, HazeSegs = 8;         // DeadEye segment counts (smooth at low sampling)
+    private const int NebulaStrands = 6;
+    // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
+    private const double EnergyAttack = 0.20, EnergyRelease = 0.05, EnergyGain = 3.0;
+    private const double SpreadFloor = 2.5, SpreadSpan = 10.5;   // fan width A in [2.5, 13.0] px
 
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -53,12 +58,15 @@ public partial class RecordingIndicatorWindow : Window
     private double _visibleTo = 1.0;
     private bool _tickHooked;
     private string _skin = "nebula";  // "nebula" | "lantern" (spec 2026-07-17 default)
+    private double _nebEnergy;         // smoothed mic loudness (asymmetric follower)
+    private Polyline[] _strands = null!;  // [0] = StrandHot core, [1..5] = Strand1..5
 
     public RecordingIndicatorWindow()
     {
         InitializeComponent();
         _dim.Freeze();
         _hot.Freeze();
+        _strands = new[] { StrandHot, Strand1, Strand2, Strand3, Strand4, Strand5 };
         ApplySkinVisibility();
     }
 
@@ -109,9 +117,7 @@ public partial class RecordingIndicatorWindow : Window
         var neb = Nebula ? Visibility.Visible : Visibility.Collapsed;
         var lan = Nebula ? Visibility.Collapsed : Visibility.Visible;
         HazeLine.Visibility = neb;
-        Strand1.Visibility = neb;
-        Strand2.Visibility = neb;
-        StrandHot.Visibility = neb;
+        foreach (var s in _strands) s.Visibility = neb;
         GlowLine.Visibility = lan;
         ScopeLine.Visibility = lan;
     }
@@ -120,6 +126,7 @@ public partial class RecordingIndicatorWindow : Window
     {
         _wave.Reset();
         _lastPartial = "";
+        _nebEnergy = 0;                 // each recording swells in from calm
         InterimText.Inlines.Clear();
 
         _state = ScopeState.Igniting;   // re-show mid-retract re-ignites
@@ -127,18 +134,15 @@ public partial class RecordingIndicatorWindow : Window
         _visibleTo = 0.0;
         ScopeLine.Opacity = CoreOpacity;
         GlowLine.Opacity = GlowOpacity;
-        StrandHot.Opacity = HotOpacity;
-        Strand1.Opacity = StrandOpacity;
-        Strand2.Opacity = StrandOpacity;
         HazeLine.Opacity = HazeOpacity;
+        foreach (var s in _strands) s.Opacity = StrandOpacity;
+        StrandHot.Opacity = HotOpacity;
         var empty = new PointCollection();
         empty.Freeze();   // frozen: safely shared across polylines
         ScopeLine.Points = empty;
         GlowLine.Points = empty;
-        StrandHot.Points = empty;
-        Strand1.Points = empty;
-        Strand2.Points = empty;
         HazeLine.Points = empty;
+        foreach (var s in _strands) s.Points = empty;
         BeamPip.Visibility = Visibility.Visible;
         BeamPip.Opacity = 1.0;
         if (!_tickHooked)
@@ -233,19 +237,22 @@ public partial class RecordingIndicatorWindow : Window
         if (Nebula)
         {
             double tSlow = (now - _showT0) * NebulaDrift;
-            Func<double, double> ampAt = u =>
-                ScopeGeometry.WispEnv(u) * ScopeGeometry.IgnitionAmp(u, head);
-            SetLine(HazeLine, HazeOpacity * fade, ScopeGeometry.BuildNebulaPoints(
-                _wave.Values, ScopeWidth, ScopeHeight, ampAt, tSlow,
-                HazeSeed, 1.0, NebulaAmpPx * 0.7, visibleFrom, visibleTo));
-            for (int s = 0; s < 3; s++)
+            // Mic loudness -> asymmetric follower (fast swell, slow settle) -> fan width + glow.
+            double raw = ScopeGeometry.MeanAbs(_wave.Values);
+            _nebEnergy += (raw > _nebEnergy ? EnergyAttack : EnergyRelease) * (raw - _nebEnergy);
+            double enorm = Math.Clamp(_nebEnergy * EnergyGain, 0, 1);
+            double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 2.5..13.0 px
+            double glow = 0.55 + 0.45 * enorm;             // strand brightness, floored
+            SetLine(HazeLine, HazeOpacity * (0.5 + 0.5 * enorm) * fade,
+                ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, HazeSegs,
+                    a * 0.7, tSlow, HazeSeed, 1.0, head, visibleFrom, visibleTo));
+            for (int s = 0; s < NebulaStrands; s++)
             {
-                var line = s == 0 ? StrandHot : s == 1 ? Strand1 : Strand2;
-                double baseA = s == 0 ? HotOpacity : StrandOpacity;
-                SetLine(line, baseA * fade, ScopeGeometry.BuildNebulaPoints(
-                    _wave.Values, ScopeWidth, ScopeHeight, ampAt, tSlow,
-                    SeedBase + s * SeedStep, 0.9 + s * 0.13,
-                    NebulaAmpPx * (0.35 + s * 0.22), visibleFrom, visibleTo));
+                double baseA = (s == 0 ? HotOpacity : StrandOpacity) * glow * fade;
+                SetLine(_strands[s], baseA,
+                    ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, NebulaSegs,
+                        a * (0.35 + s * 0.22), tSlow, SeedBase + s * SeedStep,
+                        0.9 + s * 0.13, head, visibleFrom, visibleTo));
             }
         }
         else
