@@ -59,6 +59,8 @@ public partial class RecordingIndicatorWindow : Window
     private bool _tickHooked;
     private string _skin = "nebula";  // "nebula" | "lantern" (spec 2026-07-17 default)
     private double _nebEnergy;         // smoothed mic loudness (asymmetric follower)
+    private double _nebPhase;          // accumulated drift phase (voice-speed clock)
+    private long _nebLastT;            // last nebula frame time for dt
     private Polyline[] _strands = null!;  // [0] = StrandHot core, [1..5] = Strand1..5
 
     public RecordingIndicatorWindow()
@@ -127,6 +129,8 @@ public partial class RecordingIndicatorWindow : Window
         _wave.Reset();
         _lastPartial = "";
         _nebEnergy = 0;                 // each recording swells in from calm
+        _nebPhase = 0;
+        _nebLastT = Environment.TickCount64;
         InterimText.Inlines.Clear();
 
         _state = ScopeState.Igniting;   // re-show mid-retract re-ignites
@@ -236,11 +240,14 @@ public partial class RecordingIndicatorWindow : Window
     {
         if (Nebula)
         {
-            double tSlow = (now - _showT0) * NebulaDrift;
+            double dt = Math.Clamp(now - _nebLastT, 0, 100);   // hitch clamp (DeadEye precedent)
+            _nebLastT = now;
             // Mic loudness -> asymmetric follower (fast swell, slow settle) -> fan width + glow.
             double raw = ScopeGeometry.MeanAbs(_wave.Values);
             _nebEnergy += (raw > _nebEnergy ? EnergyAttack : EnergyRelease) * (raw - _nebEnergy);
             double enorm = Math.Clamp(_nebEnergy * EnergyGain, 0, 1);
+            _nebPhase += dt * NebulaDrift * ScopeGeometry.NebulaPhaseRate(enorm);
+            double tSlow = _nebPhase;
             double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 2.5..13.0 px
             double glow = 0.55 + 0.45 * enorm;             // strand brightness, floored
             SetLine(HazeLine, HazeOpacity * (0.5 + 0.5 * enorm) * fade,

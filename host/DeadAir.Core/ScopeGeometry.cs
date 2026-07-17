@@ -110,4 +110,10 @@ public static class ScopeGeometry
         }
         return pts;
     }
+
+    /// <summary>Nebula drift-rate multiplier from smoothed loudness: calm 0.6×
+    /// the tamed base rate, full voice 3.0× (which restores DeadEye 1.17's
+    /// original un-slowed drift). Linear in enorm, clamped to [0,1].</summary>
+    public static double NebulaPhaseRate(double enorm)
+        => 0.6 + 2.4 * Math.Clamp(enorm, 0.0, 1.0);
 }

@@ -288,4 +288,27 @@ public class ScopeGeometryTests
             if (u > 0.5) Assert.Equal(20.0, p[i].Y, 12);   // IgnitionAmp(u>head) == 0
         }
     }
+
+    // ---- NebulaPhaseRate: voice-driven drift-speed multiplier ----
+
+    [Theory]
+    [InlineData(0.0, 0.6)]
+    [InlineData(0.5, 1.8)]
+    [InlineData(1.0, 3.0)]
+    [InlineData(-1.0, 0.6)]   // clamped below
+    [InlineData(2.0, 3.0)]    // clamped above
+    public void NebulaPhaseRate_LinearAndClamped(double enorm, double expected)
+        => Assert.Equal(expected, ScopeGeometry.NebulaPhaseRate(enorm), 12);
+
+    [Fact]
+    public void NebulaPhaseRate_MonotonicInEnorm()
+    {
+        double prev = 0;
+        for (double e = 0; e <= 1.0001; e += 0.05)
+        {
+            double r = ScopeGeometry.NebulaPhaseRate(e);
+            Assert.True(r >= prev, $"rate fell at enorm={e}");
+            prev = r;
+        }
+    }
 }
