@@ -40,4 +40,27 @@ public static class ScopeGeometry
         double p = 1 - Math.Clamp(tMs / RetractMs, 0.0, 1.0);
         return p * p * (3 - 2 * p);
     }
+
+    /// <summary>
+    /// Map samples to canvas points. x is FIXED per index (true-u rule: ignition
+    /// and retract unveil/withdraw the wave, never compress it); y = mid −
+    /// v·mid·ampAt(u). Points with u &lt; visibleFrom or u &gt; visibleTo are
+    /// omitted. Fewer than two samples → empty.
+    /// </summary>
+    public static (double X, double Y)[] BuildPoints(
+        IReadOnlyList<double> samples, double width, double height,
+        Func<double, double> ampAt, double visibleFrom = 0.0, double visibleTo = 1.0)
+    {
+        int n = samples.Count;
+        if (n < 2) return Array.Empty<(double, double)>();
+        double mid = height / 2.0, step = width / (n - 1);
+        var pts = new List<(double, double)>(n);
+        for (int i = 0; i < n; i++)
+        {
+            double u = (double)i / (n - 1);
+            if (u < visibleFrom || u > visibleTo) continue;
+            pts.Add((i * step, mid - samples[i] * mid * ampAt(u)));
+        }
+        return pts.ToArray();
+    }
 }

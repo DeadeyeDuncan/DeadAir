@@ -114,4 +114,57 @@ public class ScopeGeometryTests
             prev = f;
         }
     }
+
+    // ---- BuildPoints: fixed-x mapping with a visibility window ----
+
+    private static readonly double[] Bump = { 0.0, 0.0, 1.0, 0.0, 0.0 };
+
+    [Fact]
+    public void BuildPoints_MapsSamplesToCanvas()
+    {
+        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 1.0);
+        Assert.Equal(5, pts.Length);
+        Assert.Equal(new[] { 0.0, 25.0, 50.0, 75.0, 100.0 },
+            pts.Select(p => p.X).ToArray());
+        Assert.Equal(20.0, pts[0].Y, 12);   // v=0 -> midline
+        Assert.Equal(0.0, pts[2].Y, 12);    // v=1, amp 1 -> top
+    }
+
+    [Fact]
+    public void BuildPoints_AmpScalesDeflectionNotMidline()
+    {
+        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 0.5);
+        Assert.Equal(20.0, pts[0].Y, 12);   // v=0 stays on the midline
+        Assert.Equal(10.0, pts[2].Y, 12);   // v=1 halved toward midline
+    }
+
+    [Fact]
+    public void BuildPoints_AmpAtReceivesU()
+    {
+        var seen = new List<double>();
+        ScopeGeometry.BuildPoints(Bump, 100, 40, u => { seen.Add(u); return 1.0; });
+        Assert.Equal(new[] { 0.0, 0.25, 0.5, 0.75, 1.0 }, seen.ToArray());
+    }
+
+    [Fact]
+    public void BuildPoints_VisibleToOmitsPointsBeyondHead()
+    {
+        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 1.0, visibleTo: 0.5);
+        Assert.Equal(new[] { 0.0, 25.0, 50.0 }, pts.Select(p => p.X).ToArray());
+    }
+
+    [Fact]
+    public void BuildPoints_VisibleFromKeepsFixedXPositions()
+    {
+        // Retract: left edge slides right; surviving xs are NOT remapped to 0.
+        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 1.0, visibleFrom: 0.5);
+        Assert.Equal(new[] { 50.0, 75.0, 100.0 }, pts.Select(p => p.X).ToArray());
+    }
+
+    [Fact]
+    public void BuildPoints_FewerThanTwoSamplesIsEmpty()
+    {
+        Assert.Empty(ScopeGeometry.BuildPoints(Array.Empty<double>(), 100, 40, _ => 1.0));
+        Assert.Empty(ScopeGeometry.BuildPoints(new[] { 0.7 }, 100, 40, _ => 1.0));
+    }
 }
