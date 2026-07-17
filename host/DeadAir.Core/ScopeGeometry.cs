@@ -93,11 +93,14 @@ public static class ScopeGeometry
     /// WispNoff perpendicular offset (NO PCM waveform), faithfully ported from
     /// DeadEye's wispLitStrand. Sampled at `segs` segments (segs+1 points) across
     /// the true-u window [visibleFrom, visibleTo] — low sampling is what keeps the
-    /// curve smooth. WispEnv pinches the ends; IgnitionAmp gates the ignition sweep.</summary>
+    /// curve smooth. WispEnv pinches the ends; IgnitionAmp gates the ignition sweep.
+    /// `turb` (0..1-ish) mixes in a double-frequency octave of the same noise
+    /// (WispNoff at 2u — the function itself is untouched), normalized by
+    /// (1+turb) so |offset| never exceeds `amp`; voice-gated by the caller.</summary>
     public static (double X, double Y)[] BuildStrandPoints(
         double width, double height, int segs, double amp,
         double tSlow, double seed, double k, double head,
-        double visibleFrom = 0.0, double visibleTo = 1.0)
+        double visibleFrom = 0.0, double visibleTo = 1.0, double turb = 0.0)
     {
         if (segs < 1 || visibleTo <= visibleFrom) return Array.Empty<(double, double)>();
         double mid = height / 2.0, span = visibleTo - visibleFrom;
@@ -105,7 +108,10 @@ public static class ScopeGeometry
         for (int i = 0; i <= segs; i++)
         {
             double u = visibleFrom + span * ((double)i / segs);
-            double off = WispNoff(u, tSlow, seed, k) * amp * WispEnv(u) * IgnitionAmp(u, head);
+            double noise = WispNoff(u, tSlow, seed, k);
+            if (turb > 0)
+                noise = (noise + WispNoff(u * 2.0, tSlow, seed + 41.3, k) * turb) / (1 + turb);
+            double off = noise * amp * WispEnv(u) * IgnitionAmp(u, head);
             pts[i] = (u * width, mid + off);
         }
         return pts;

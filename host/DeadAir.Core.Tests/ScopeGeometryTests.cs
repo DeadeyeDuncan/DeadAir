@@ -311,4 +311,37 @@ public class ScopeGeometryTests
             prev = r;
         }
     }
+
+    // ---- BuildStrandPoints turbulence: voice-gated high-frequency wiggle ----
+
+    [Fact]
+    public void BuildStrandPoints_TurbZeroMatchesBase()
+    {
+        var a = ScopeGeometry.BuildStrandPoints(296, 40, 32, 10, 1234, 9.4, 1.03, 1.0);
+        var b = ScopeGeometry.BuildStrandPoints(296, 40, 32, 10, 1234, 9.4, 1.03, 1.0, 0.0, 1.0, 0.0);
+        Assert.Equal(a.Select(p => p.Y), b.Select(p => p.Y));
+    }
+
+    [Fact]
+    public void BuildStrandPoints_TurbChangesInteriorShape()
+    {
+        var a = ScopeGeometry.BuildStrandPoints(296, 40, 32, 10, 1234, 9.4, 1.03, 1.0);
+        var b = ScopeGeometry.BuildStrandPoints(296, 40, 32, 10, 1234, 9.4, 1.03, 1.0, 0.0, 1.0, 0.6);
+        Assert.NotEqual(a.Select(p => p.Y), b.Select(p => p.Y));
+    }
+
+    [Fact]
+    public void BuildStrandPoints_TurbKeepsAmpBound()
+    {
+        // Normalized mix: |offset| stays <= amp regardless of turb.
+        var p = ScopeGeometry.BuildStrandPoints(296, 40, 48, 10, 777, 3.7, 1.0, 1.0, 0.0, 1.0, 0.6);
+        Assert.All(p, q => Assert.True(Math.Abs(q.Y - 20.0) <= 10.0 + 1e-9));
+    }
+
+    [Fact]
+    public void BuildStrandPoints_TurbKeepsClipBoundAtMaxAmp()
+    {
+        var p = ScopeGeometry.BuildStrandPoints(296, 40, 48, 13.0 * 1.45, 777, 32.2, 1.55, 1.0, 0.0, 1.0, 0.6);
+        Assert.All(p, q => Assert.True(Math.Abs(q.Y - 20.0) < 19.45));
+    }
 }

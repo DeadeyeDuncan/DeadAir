@@ -24,7 +24,8 @@ public partial class RecordingIndicatorWindow : Window
     private const double StrandOpacity = 0.34, HotOpacity = 0.62, HazeOpacity = 0.05;
     private const double NebulaDrift = 0.33;                 // 3x-slowed drift
     private const double SeedBase = 3.7, SeedStep = 5.7, HazeSeed = 34.7;
-    private const int NebulaSegs = 32, HazeSegs = 16;        // 2x DeadEye's 16/8: renders the noise's high-freq term (~80px waves) the pill was flattening — user asked for more wiggle
+    private const int NebulaSegs = 48, HazeSegs = 16;        // 48 renders the voice-gated 2u turbulence octave (~40px waves); haze stays calm at 16
+    private const double TurbSpan = 0.6;                     // turbulence mix at full voice (0 at silence)
     private const int NebulaStrands = 6;
     // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
     private const double EnergyAttack = 0.20, EnergyRelease = 0.05, EnergyGain = 3.0;
@@ -259,7 +260,8 @@ public partial class RecordingIndicatorWindow : Window
                 SetLine(_strands[s], baseA,
                     ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, NebulaSegs,
                         a * (0.35 + s * 0.22), tSlow, SeedBase + s * SeedStep,
-                        0.9 + s * 0.13, head, visibleFrom, visibleTo));
+                        0.9 + s * 0.13, head, visibleFrom, visibleTo,
+                        TurbSpan * enorm));   // voice-gated wiggle; haze stays calm
             }
         }
         else
