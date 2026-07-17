@@ -87,6 +87,10 @@ public sealed class InjectConfig
 public sealed class PillConfig
 {
     public string Skin { get; set; } = "nebula"; // nebula | lantern (host-only, never sent to the sidecar)
+    // Nebula dials (host-only). Window clamps at apply: 0.5-8 / 0-1.5 / 0-4.
+    public double FanGain { get; set; } = 3.0;      // voice sensitivity of the fan
+    public double Wiggle { get; set; } = 0.6;       // turbulence depth at full voice
+    public double WiggleSpeed { get; set; } = 1.0;  // traveling-wave speed multiplier
 }
 
 public sealed class SidecarLaunchConfig

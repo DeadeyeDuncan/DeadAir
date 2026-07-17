@@ -65,6 +65,7 @@ public partial class App : Application
         _tray.ForceCreate();
         _indicator = new RecordingIndicatorWindow();
         _indicator.SetSkin(_config.Pill.Skin);
+        _indicator.ApplyPillTuning(_config.Pill);
         var notifier = new TrayNotifier(_tray, Dispatcher, state =>
         {
             if (state == FlowState.Recording) _indicator.ShowIndicator();
@@ -217,6 +218,7 @@ public partial class App : Application
             _orchestrator.Mode = _config.Cleanup.Mode; // apply live, no restart needed
             _modeMenuItem.IsChecked = _config.Cleanup.Mode == CleanupMode.Polished;
             _indicator.SetSkin(_config.Pill.Skin); // apply skin live, no restart needed
+            _indicator.ApplyPillTuning(_config.Pill);
             await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
         }
         catch (Exception ex)

@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using DeadAir.Core;
+using DeadAir.Core.Config;
 
 namespace DeadAir.App;
 
@@ -25,11 +26,10 @@ public partial class RecordingIndicatorWindow : Window
     private const double NebulaDrift = 0.33;                 // 3x-slowed drift
     private const double SeedBase = 3.7, SeedStep = 5.7, HazeSeed = 34.7;
     private const int NebulaSegs = 48, HazeSegs = 16;        // 48 renders the voice-gated 2u turbulence octave (~40px waves); haze stays calm at 16
-    private const double TurbSpan = 0.6;                     // turbulence mix at full voice (0 at silence)
     private const double TurbScrollRate = 0.00035;           // u per phase-ms: octave crosses ~1/3 of the pill per second at full voice
     private const int NebulaStrands = 6;
     // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
-    private const double EnergyAttack = 0.20, EnergyRelease = 0.05, EnergyGain = 3.0;
+    private const double EnergyAttack = 0.20, EnergyRelease = 0.05;
     private const double SpreadFloor = 2.5, SpreadSpan = 10.5;   // fan width A in [2.5, 13.0] px
 
     private const int GWL_EXSTYLE = -20;
@@ -63,6 +63,8 @@ public partial class RecordingIndicatorWindow : Window
     private double _nebEnergy;         // smoothed mic loudness (asymmetric follower)
     private double _nebPhase;          // accumulated drift phase (voice-speed clock)
     private long _nebLastT;            // last nebula frame time for dt
+    // Nebula dials (config-backed via ApplyPillTuning; defaults = shipped constants).
+    private double _fanGain = 3.0, _turbSpan = 0.6, _wiggleSpeed = 1.0;
     private Polyline[] _strands = null!;  // [0] = StrandHot core, [1..5] = Strand1..5
 
     public RecordingIndicatorWindow()
@@ -112,6 +114,15 @@ public partial class RecordingIndicatorWindow : Window
     {
         _skin = skin == "lantern" ? "lantern" : "nebula";
         ApplySkinVisibility();
+    }
+
+    /// <summary>Apply the nebula tuning dials from config, range-clamped
+    /// (degrade-don't-crash: hand-edited config lands in the legal range).</summary>
+    public void ApplyPillTuning(PillConfig pill)
+    {
+        _fanGain = Math.Clamp(pill.FanGain, 0.5, 8.0);
+        _turbSpan = Math.Clamp(pill.Wiggle, 0.0, 1.5);
+        _wiggleSpeed = Math.Clamp(pill.WiggleSpeed, 0.0, 4.0);
     }
 
     private bool Nebula => _skin == "nebula";
@@ -247,7 +258,7 @@ public partial class RecordingIndicatorWindow : Window
             // Mic loudness -> asymmetric follower (fast swell, slow settle) -> fan width + glow.
             double raw = ScopeGeometry.MeanAbs(_wave.Values);
             _nebEnergy += (raw > _nebEnergy ? EnergyAttack : EnergyRelease) * (raw - _nebEnergy);
-            double enorm = Math.Clamp(_nebEnergy * EnergyGain, 0, 1);
+            double enorm = Math.Clamp(_nebEnergy * _fanGain, 0, 1);
             _nebPhase += dt * NebulaDrift * ScopeGeometry.NebulaPhaseRate(enorm);
             double tSlow = _nebPhase;
             double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 2.5..13.0 px
@@ -262,8 +273,8 @@ public partial class RecordingIndicatorWindow : Window
                     ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, NebulaSegs,
                         a * (0.35 + s * 0.22), tSlow, SeedBase + s * SeedStep,
                         0.9 + s * 0.13, head, visibleFrom, visibleTo,
-                        TurbSpan * enorm,     // voice-gated wiggle; haze stays calm
-                        tSlow * TurbScrollRate));   // traveling wave — scroll speed rides the voice-rated clock
+                        _turbSpan * enorm,     // voice-gated wiggle; haze stays calm
+                        tSlow * TurbScrollRate * _wiggleSpeed));   // traveling wave — scroll speed rides the voice-rated clock
             }
         }
         else
