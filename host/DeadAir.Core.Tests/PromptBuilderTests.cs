@@ -22,4 +22,49 @@ public class PromptBuilderTests
         Assert.StartsWith(cfg.Prompts.Polished, p);
         Assert.Contains("DeadMind, gfx1030", p);
     }
+
+    [Fact]
+    public void EnglishOutput_AnyCasing_NoTranslationDirective()
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "english";
+        Assert.Equal(cfg.Prompts.Faithful,
+            PromptBuilder.Build(CleanupMode.Faithful, cfg));
+    }
+
+    [Fact]
+    public void SpanishOutput_AppendsFilledDirective_AfterBasePrompt()
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        var p = PromptBuilder.Build(CleanupMode.Faithful, cfg);
+        Assert.StartsWith(cfg.Prompts.Faithful, p);
+        Assert.Contains("render the transcript in Spanish", p);
+        Assert.Contains("ONLY the Spanish text", p);
+        Assert.DoesNotContain("{language}", p);
+        Assert.DoesNotContain("{style}", p);
+    }
+
+    [Fact]
+    public void TranslationStyle_TracksCleanupMode()
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        Assert.Contains("literal", PromptBuilder.Build(CleanupMode.Faithful, cfg));
+        Assert.Contains("natural and fluent",
+            PromptBuilder.Build(CleanupMode.Polished, cfg));
+    }
+
+    [Fact]
+    public void SpanishOutput_DictionarySuffix_StaysLast()
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = " Spanish ";
+        cfg.Dictionary.Add("DeadMind");
+        var p = PromptBuilder.Build(CleanupMode.Polished, cfg);
+        Assert.Contains("render the transcript in Spanish", p);
+        Assert.True(p.IndexOf("render the transcript") < p.IndexOf("DeadMind"),
+            "dictionary suffix must come after the translation directive");
+        Assert.EndsWith("DeadMind.", p);
+    }
 }
