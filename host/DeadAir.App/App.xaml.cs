@@ -22,7 +22,6 @@ public partial class App : Application
     private System.Windows.Controls.MenuItem _modeMenuItem = null!;
     private System.Windows.Controls.MenuItem _translateMenuItem = null!;
     private string _translateLanguage = "Spanish";
-    private string _lastSidecarConfigJson = "";
     private RecordingIndicatorWindow _indicator = null!;
     private Mutex _singleInstance = null!;
 
@@ -152,14 +151,7 @@ public partial class App : Application
         machine.HoldEnded += () => FireAndForget(_orchestrator.OnHotkeyUpAsync, "hotkey-up");
         _hook = new KeyboardHook(machine);
 
-        try
-        {
-            await _sidecar.LaunchAsync();
-            // LaunchAsync sent the full config; remember what the sidecar has
-            // so host-only settings saves don't bounce the ASR engine.
-            _lastSidecarConfigJson = System.Text.Json.JsonSerializer.Serialize(
-                Core.Sidecar.ConfigCommand.From(_config));
-        }
+        try { await _sidecar.LaunchAsync(); }
         catch (Exception ex)
         { notifier.Toast($"Sidecar failed to start: {ex.Message}"); }
     }
@@ -265,17 +257,10 @@ public partial class App : Application
             _translateMenuItem.IsChecked = _config.Cleanup.TranslationActive;
             _indicator.SetSkin(_config.Pill.Skin); // apply skin live, no restart needed
             _indicator.ApplyPillTuning(_config.Pill);
-            // The sidecar tears down + recreates the ASR engine on EVERY config
-            // command, so only send one when an ASR-relevant field actually
-            // changed (ConfigCommand carries nothing else). A failed initial
-            // launch leaves the baseline "" and the next save re-sends.
-            var sidecarJson = System.Text.Json.JsonSerializer.Serialize(
-                Core.Sidecar.ConfigCommand.From(_config));
-            if (sidecarJson != _lastSidecarConfigJson)
-            {
-                await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
-                _lastSidecarConfigJson = sidecarJson;
-            }
+            // Host-only changes (cleanup mode, output language, Ollama, pill,
+            // prompts) must not bounce the ASR engine — the manager skips the
+            // send unless an ASR-relevant field changed.
+            await _sidecar.SendConfigIfChangedAsync(_config); // hot-reload sidecar side
         }
         catch (Exception ex)
         {

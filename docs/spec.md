@@ -142,7 +142,10 @@ auto-repeat key-down.
 **SidecarManager** — Spawns `python asr_sidecar.py` (or a packaged sidecar exe),
 wires stdin/stdout JSON-lines, forwards commands, parses events, monitors
 liveness, and restarts on crash (capped retry with backoff). Surfaces sidecar
-state to the tray. Sends `config` on startup and whenever settings change.
+state to the tray. Sends `config` on startup/restart; on settings saves it is sent only when an
+ASR-relevant field (engine, models, mic, dictionary, GPU settings, partials)
+actually changed — host-only saves (cleanup mode, output language, Ollama,
+pill) skip the send so the ASR engine is not torn down and recreated.
 
 **OllamaClient** — `HttpClient` to `POST /api/generate` on
 `http://localhost:11434`, `stream:true`. Uses the active mode's system prompt,
@@ -341,7 +344,7 @@ Reference skeleton: [`cjpais/Handy`](https://github.com/cjpais/Handy) (Rust).
 
 | Failure | Behavior |
 |---|---|
-| Ollama down / timeout | Inject **raw transcript**; toast "cleanup skipped". |
+| Ollama down / timeout | Inject **raw transcript**; toast "cleanup skipped" ("translation skipped" when translating). |
 | GPU/Vulkan init fails | Sidecar auto-selects CPU engine; emits `degraded`; host toasts once. |
 | Sidecar crash | SidecarManager restarts (backoff); current utterance lost (audio not persisted); tray shows error. |
 | whisper-server dies | GpuEngine restarts it or falls to CPU + `degraded`. |
@@ -349,7 +352,7 @@ Reference skeleton: [`cjpais/Handy`](https://github.com/cjpais/Handy) (Rust).
 | Empty/no-speech transcript | Inject nothing; brief tray flash. |
 | Transcript < skipGuardChars | Bypass LLM; inject raw. |
 | Transcript < skipGuardChars, translating | LLM still called (guard bypassed) so the utterance is translated. |
-| Ollama model not pulled | Today: cleanup fails → raw transcript injected + "cleanup skipped" toast. Planned (Phase 4): detect at startup, prompt/auto-pull. |
+| Ollama model not pulled | Today: cleanup fails → raw transcript injected + "cleanup skipped" ("translation skipped" when translating) toast. Planned (Phase 4): detect at startup, prompt/auto-pull. |
 | Emoji / supra-BMP chars via SendInput | Split into UTF-16 surrogate pairs (two INPUT events). |
 
 ---
