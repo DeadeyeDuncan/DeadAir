@@ -37,6 +37,12 @@
                 <ComboBoxItem Content="Polished"/>
             </ComboBox>
 
+            <TextBlock FontWeight="Bold" Text="Output language"/>
+            <ComboBox x:Name="OutputLanguageBox" Margin="0,4,0,12">
+                <ComboBoxItem Content="English"/>
+                <ComboBoxItem Content="Spanish"/>
+            </ComboBox>
+
             <TextBlock FontWeight="Bold" Text="Scope skin"/>
             <ComboBox x:Name="SkinBox" Margin="0,4,0,12">
                 <ComboBoxItem Content="nebula"/>
