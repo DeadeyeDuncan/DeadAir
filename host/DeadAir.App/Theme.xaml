@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- DeadEye red-theme tokens (v1.19). KEYED resources only in this file:
+         it is merged app-wide and must never restyle the pill implicitly. -->
+    <SolidColorBrush x:Key="BgBrush" Color="#060404"/>
+    <SolidColorBrush x:Key="PanelBrush" Color="#120D0C"/>
+    <SolidColorBrush x:Key="InkBrush" Color="#DED7CE"/>
+    <SolidColorBrush x:Key="BodyBrush" Color="#B3ACA4"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#857E77"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#C11D12"/>
+    <SolidColorBrush x:Key="AccentStrongBrush" Color="#E8382B"/>
+    <SolidColorBrush x:Key="StrokeBrush" Color="#29BEAFA5"/>
+
+    <Style x:Key="DeadAirContextMenu" TargetType="ContextMenu">
+        <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style x:Key="DeadAirMenuItem" TargetType="MenuItem">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+        <Style.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="DeadAirSeparator" TargetType="Separator">
+        <Setter Property="Background" Value="{StaticResource StrokeBrush}"/>
+        <Setter Property="Margin" Value="4,2"/>
+    </Style>
+</ResourceDictionary>

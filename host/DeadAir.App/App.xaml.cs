@@ -171,6 +171,8 @@ public partial class App : Application
     private System.Windows.Controls.ContextMenu BuildMenu()
     {
         var menu = new System.Windows.Controls.ContextMenu();
+        menu.Style = (System.Windows.Style)Current.FindResource("DeadAirContextMenu");
+        var itemStyle = (System.Windows.Style)Current.FindResource("DeadAirMenuItem");
 
         // IsChecked must reflect the loaded config (the orchestrator already
         // starts in config.Cleanup.Mode) and must be set BEFORE the handlers
@@ -179,17 +181,18 @@ public partial class App : Application
         {
             Header = "Polished mode", IsCheckable = true,
             IsChecked = _config.Cleanup.Mode == CleanupMode.Polished,
+            Style = itemStyle,
         };
         mode.Checked += (_, _) => _orchestrator.Mode = CleanupMode.Polished;
         mode.Unchecked += (_, _) => _orchestrator.Mode = CleanupMode.Faithful;
         _modeMenuItem = mode;
 
         var settings = new System.Windows.Controls.MenuItem
-        { Header = "Settings…" };
+        { Header = "Settings…", Style = itemStyle };
         settings.Click += (_, _) =>
             new SettingsWindow(_config, OnSettingsSaved).Show();
 
-        var exit = new System.Windows.Controls.MenuItem { Header = "Exit" };
+        var exit = new System.Windows.Controls.MenuItem { Header = "Exit", Style = itemStyle };
         exit.Click += async (_, _) =>
         {
             try
@@ -210,7 +213,10 @@ public partial class App : Application
 
         menu.Items.Add(mode);
         menu.Items.Add(settings);
-        menu.Items.Add(new System.Windows.Controls.Separator());
+        menu.Items.Add(new System.Windows.Controls.Separator
+        {
+            Style = (System.Windows.Style)Current.FindResource("DeadAirSeparator"),
+        });
         menu.Items.Add(exit);
         return menu;
     }
