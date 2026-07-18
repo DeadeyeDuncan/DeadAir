@@ -45,9 +45,9 @@ Skin-specific: stroke composition (which Polylines draw) and per-point math.
 
 | Element | Value | Source |
 |---|---|---|
-| Strand color (1,2) | `#CCA19A` = `mix(#B2524B, #DDD6CE, 0.6)`, 0.85 px, α 0.65 | nebula `_wCol` silvering formula over the Lantern `colLit`, bone target per red-theme; `_wA3` with eLit=1 |
+| Strand color (1,2) | `#C11D12` (DeadEye `--accent`, direct token), 0.85 px, α 0.65 | Silvering formula ABANDONED on the pill (user smoke: mixed tones read salmon on thin normal-alpha strokes); strands use the theme accent raw |
 | Hot core (strand 0) | `#FFF9F0`, 1.1 px, α 1.0 | `_hot3` strand: `#fff9f0`, width 1.1 when bright, alpha ×1.9 (clamped) |
-| Haze understroke | `#CCA19A`, 9 px, α 0.05, noise amp ×0.7 | haze pass: 9px, `(0.016+0.034·eLit)` ≈ 0.05, amp ×0.7 |
+| Haze understroke | `#98180F` (logo deep blood red), 9 px, α 0.05, noise amp ×0.7 | haze pass: 9px, `(0.016+0.034·eLit)` ≈ 0.05, amp ×0.7 |
 | Noise | `WispNoff(u, t·0.33, seed, k)` — 3 layered sines `/1.83` | `wispNoff` verbatim; `t·0.33` = the tamed 3×-slowed drift |
 | Noise envelope | `WispEnv(u) = sin(π·u)^0.75`, **exactly 0** at/outside endpoints | `wispEnv` verbatim incl. the endpoint clamp (their `wispEnv(1)=1.16e-12` bug — pinned as a test here) |
 | Strand seeds / drift rates | seed `3.7 + s·5.7` (s=0,1,2), k `0.9 + s·0.13`; haze seed `34.7`, k 1.0 | per-strand `_phase·10 + s·5.7`, `0.9 + s·0.13` with a fixed phase 0.37; haze seed `+31` |
@@ -72,8 +72,8 @@ Skin-specific: stroke composition (which Polylines draw) and per-point math.
 ### `RecordingIndicatorWindow` (App)
 
 - **XAML:** four new Polylines inside `ScopeCanvas`, z-order bottom→top:
-  `HazeLine` (9 px, `#CCA19A`, α .05) → `Strand1`/`Strand2` (0.85 px,
-  `#CCA19A`, α .65) → `StrandHot` (1.1 px, `#FFF9F0`, α 1.0). Pip shared.
+  `HazeLine` (9 px, `#98180F`, α .05) → `Strand1`/`Strand2` (0.85 px,
+  `#C11D12`, α .65) → `StrandHot` (1.1 px, `#FFF9F0`, α 1.0). Pip shared.
 - **Skin state:** `_skin` field (default `"nebula"`), `public void
   SetSkin(string skin)` — normalizes (anything ≠ `"lantern"` → `"nebula"`),
   toggles element visibility between the lantern set {GlowLine, ScopeLine}

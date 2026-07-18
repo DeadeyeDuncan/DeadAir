@@ -32,7 +32,7 @@ and lifecycle-only change in the host pill.
 
 | Element | Value | Source |
 |---|---|---|
-| Core stroke | `#B2524B` ≈ `mix(#98180F, #ffffff, 0.25)`, 1.3 px | Lantern `colLit = lighten(edgeCol, 0.25)`, core 1.2 px |
+| Core stroke | `#E8382B` (DeadEye `--accent-strong`, direct token — the white-lift mix washed red to salmon on thin WPF strokes), 1.3 px | Lantern `colLit = lighten(edgeCol, 0.25)`, core 1.2 px |
 | Glow stroke | `#98180F` at ~0.30 opacity, 3.5 px, under the core | Lantern phosphor pass: 3 px at 0.32× core alpha |
 | Beam pip | `#FFF9F0` small ellipse + faded halo | Lantern hot-core white |
 | Endpoint taper | amplitude × `sin(π·u)`, `u` = x/width | Lantern trace envelope |
@@ -71,7 +71,7 @@ Static helpers, unit-testable, same Core-holds-the-logic pattern as
 ### `RecordingIndicatorWindow` (App)
 
 - **XAML:** add `GlowLine` Polyline (3.5 px, `#98180F`, opacity 0.30,
-  round join) *under* `ScopeLine`; restyle `ScopeLine` to `#B2524B`, 1.3 px;
+  round join) *under* `ScopeLine`; restyle `ScopeLine` to `#E8382B`, 1.3 px;
   add `BeamPip` Ellipse (`#FFF9F0`, ~5 px, hidden at rest). Both polylines get
   the same `Points`; pip is positioned by Canvas.Left/Top.
 - **State machine:** `Idle → Igniting(300 ms) → Live → Retracting(450 ms) →

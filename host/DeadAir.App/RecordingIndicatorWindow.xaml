@@ -20,33 +20,33 @@
                 <Polyline x:Name="GlowLine" Stroke="#98180F" StrokeThickness="3.5"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.30"/>
-                <Polyline x:Name="ScopeLine" Stroke="#B2524B" StrokeThickness="1.3"
+                <Polyline x:Name="ScopeLine" Stroke="#E8382B" StrokeThickness="1.3"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.95"/>
                 <!-- Nebula skin (spec 2026-07-17 redesign): 9px haze under a
                      6-strand DeadEye connection bundle; StrandHot is the white
                      core. Only one skin's elements are Visible (SetSkin). -->
-                <Polyline x:Name="HazeLine" Stroke="#CCA19A" StrokeThickness="9"
+                <Polyline x:Name="HazeLine" Stroke="#98180F" StrokeThickness="9"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.05"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand1" Stroke="#CCA19A" StrokeThickness="0.85"
+                <Polyline x:Name="Strand1" Stroke="#C11D12" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand2" Stroke="#CCA19A" StrokeThickness="0.85"
+                <Polyline x:Name="Strand2" Stroke="#C11D12" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand3" Stroke="#CCA19A" StrokeThickness="0.85"
+                <Polyline x:Name="Strand3" Stroke="#C11D12" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand4" Stroke="#CCA19A" StrokeThickness="0.85"
+                <Polyline x:Name="Strand4" Stroke="#C11D12" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="Strand5" Stroke="#CCA19A" StrokeThickness="0.85"
+                <Polyline x:Name="Strand5" Stroke="#C11D12" StrokeThickness="0.85"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
@@ -59,8 +59,8 @@
                     <Ellipse.Fill>
                         <RadialGradientBrush>
                             <GradientStop Color="#FFFFF9F0" Offset="0"/>
-                            <GradientStop Color="#CC98180F" Offset="0.45"/>
-                            <GradientStop Color="#0098180F" Offset="1"/>
+                            <GradientStop Color="#CCC11D12" Offset="0.45"/>
+                            <GradientStop Color="#00C11D12" Offset="1"/>
                         </RadialGradientBrush>
                     </Ellipse.Fill>
                 </Ellipse>
