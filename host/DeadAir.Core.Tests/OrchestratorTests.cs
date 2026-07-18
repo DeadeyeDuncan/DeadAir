@@ -100,6 +100,31 @@ public class OrchestratorTests
     }
 
     [Fact]
+    public async Task CleanupFailure_WhileTranslating_ToastsTranslationSkipped()
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        var cl = new FakeCleaner(new CleanupResult("raw words here that are long",
+            true, "connection refused"));
+        var inj = new FakeInjector(ok: true);
+        var n = new FakeNotifier();
+        var o = new Orchestrator(new FakeSidecar(), cl, inj, n, cfg);
+
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent
+        { Event = "final", Text = "raw words here that are long" });
+
+        Assert.Equal("raw words here that are long", inj.Injected);
+        Assert.Contains(n.Toasts, t =>
+            t.Contains("translation skipped") && t.Contains("connection refused"));
+        Assert.DoesNotContain(n.Toasts, t => t.Contains("cleanup skipped"));
+        // The toast fires before injection, so it must not claim the English
+        // text already landed.
+        Assert.DoesNotContain(n.Toasts, t => t.Contains("injected"));
+    }
+
+    [Fact]
     public async Task InjectFailure_ToastsClipboardHint()
     {
         var cl = new FakeCleaner(new CleanupResult("text", true, "below skip guard"));

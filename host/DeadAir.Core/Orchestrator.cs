@@ -122,7 +122,9 @@ public sealed class Orchestrator(
             var result = await cleaner.CleanAsync(e.Text ?? "", Mode);
             var cleanMs = _clock.ElapsedMilliseconds - asrMs;
             if (result.Skipped && result.Reason != "below skip guard")
-                notifier.Toast($"cleanup skipped: {result.Reason}");
+                notifier.Toast(config.Cleanup.TranslationActive
+                    ? $"translation skipped: {result.Reason}"
+                    : $"cleanup skipped: {result.Reason}");
 
             // Only advance the state if this utterance still owns it — an
             // unsolicited reset (error/empty) may have moved on, possibly into
