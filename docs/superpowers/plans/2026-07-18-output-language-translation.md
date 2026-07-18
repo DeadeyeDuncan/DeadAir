@@ -693,7 +693,8 @@ language other than English, the system prompt gains a translation directive
 Faithful=literal / Polished=natural) and the skip-guard is disabled so short
 utterances still translate. Dictionary/technical terms stay untranslated. On
 LLM failure the raw English transcript is injected with a "translation
-skipped — injected English" toast.
+skipped" toast (the toast makes no injection claim — it fires before the
+injector runs).
 ```
 
 In the config JSON example change the cleanup line to:
