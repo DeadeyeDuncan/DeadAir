@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="host/DeadAir.App/Assets/deadair-logo.jpg" alt="DeadAir — skull-waveform logo" width="380"/>
+</p>
+
 # DeadAir
 
 Fully-local, hold-to-talk voice dictation for Windows 11 — a self-hosted take on
