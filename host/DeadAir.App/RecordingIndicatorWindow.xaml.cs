@@ -30,7 +30,7 @@ public partial class RecordingIndicatorWindow : Window
     private const int NebulaStrands = 6;
     // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
     private const double EnergyAttack = 0.20, EnergyRelease = 0.05;
-    private const double SpreadFloor = 2.5, SpreadSpan = 10.5;   // fan width A in [2.5, 13.0] px
+    private const double SpreadFloor = 5.5, SpreadSpan = 7.5;   // fan width A in [5.5, 13.0] px
 
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -160,7 +160,7 @@ public partial class RecordingIndicatorWindow : Window
         GlowLine.Points = empty;
         HazeLine.Points = empty;
         foreach (var s in _strands) s.Points = empty;
-        BeamPip.Visibility = Visibility.Visible;
+        BeamPip.Visibility = Nebula ? Visibility.Collapsed : Visibility.Visible;
         BeamPip.Opacity = 1.0;
         if (!_tickHooked)
         {
@@ -205,7 +205,7 @@ public partial class RecordingIndicatorWindow : Window
                 double head = ScopeGeometry.IgnitionHead(tState);
                 _visibleTo = head;
                 RenderFrame(now, breathe, head, 0.0, head, 1.0);
-                PlacePip();
+                if (!Nebula) PlacePip();
                 if (head >= 1)
                 {
                     _state = ScopeState.Live;   // pip fade timing starts here
@@ -229,7 +229,8 @@ public partial class RecordingIndicatorWindow : Window
             {
                 double rf = ScopeGeometry.RetractFraction(tState);
                 double visibleFrom = 1 - rf;
-                if (rf <= 0 || visibleFrom >= _visibleTo)
+                double vCap = Nebula ? 1.0 : _visibleTo;
+                if (rf <= 0 || visibleFrom >= vCap)
                 {
                     _state = ScopeState.Idle;
                     Hide();
@@ -261,18 +262,19 @@ public partial class RecordingIndicatorWindow : Window
             double enorm = Math.Clamp(_nebEnergy * _fanGain, 0, 1);
             _nebPhase += dt * NebulaDrift * ScopeGeometry.NebulaPhaseRate(enorm);
             double tSlow = _nebPhase;
-            double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 2.5..13.0 px
+            double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 5.5..13.0 px
             double glow = 0.55 + 0.45 * enorm;             // strand brightness, floored
-            SetLine(HazeLine, HazeOpacity * (0.5 + 0.5 * enorm) * fade,
+            double ignFade = head >= 1 ? 1.0 : head * head * (3 - 2 * head);
+            SetLine(HazeLine, HazeOpacity * (0.5 + 0.5 * enorm) * ignFade * fade,
                 ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, HazeSegs,
-                    a * 0.7, tSlow, HazeSeed, 1.0, head, visibleFrom, visibleTo));
+                    a * 0.7, tSlow, HazeSeed, 1.0, head: 1.0, visibleFrom, visibleTo: 1.0));
             for (int s = 0; s < NebulaStrands; s++)
             {
-                double baseA = (s == 0 ? HotOpacity : StrandOpacity) * glow * fade;
+                double baseA = (s == 0 ? HotOpacity : StrandOpacity) * glow * ignFade * fade;
                 SetLine(_strands[s], baseA,
                     ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, NebulaSegs,
                         a * (0.35 + s * 0.22), tSlow, SeedBase + s * SeedStep,
-                        0.9 + s * 0.13, head, visibleFrom, visibleTo,
+                        0.9 + s * 0.13, head: 1.0, visibleFrom, visibleTo: 1.0,
                         _turbSpan * enorm,     // voice-gated wiggle; haze stays calm
                         tSlow * TurbScrollRate * _wiggleSpeed));   // traveling wave — scroll speed rides the voice-rated clock
             }
