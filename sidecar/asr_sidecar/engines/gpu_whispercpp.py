@@ -14,9 +14,9 @@ class GpuEngineError(RuntimeError):
 
 
 class GpuEngine(AsrEngine):
-    """Client for a whisper.cpp `whisper-server` (Vulkan build) subprocess.
+    """Client for a whisper.cpp `whisper-server` subprocess (any GPU backend build).
 
-    The Vulkan server can crash sporadically at inference time (AMD driver
+    The server can crash sporadically at inference time (driver
     device-lost / TDR). It is a grandchild of the C# host, so nothing above
     restarts it — a dead server would otherwise make every later dictation
     fail with ``[WinError 10061] ... actively refused`` until the whole app
@@ -117,7 +117,7 @@ class GpuEngine(AsrEngine):
             if self._proc.poll() is not None:
                 raise GpuEngineError(
                     "whisper-server exited during startup "
-                    "(no Vulkan device? bad model?)\n" + self.server_log_tail())
+                    "(no compatible GPU device? bad model?)\n" + self.server_log_tail())
             try:
                 self._client.get(self._url + "/", timeout=2)
                 return  # any HTTP response means the server is up

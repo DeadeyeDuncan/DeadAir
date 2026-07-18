@@ -23,10 +23,14 @@ of seconds.
   the key is held (default **Right Ctrl**). Press → speak → release.
 - **On-device speech recognition, two engines behind one interface:**
   - **GPU** — a whisper.cpp `whisper-server` subprocess built with the Vulkan
-    backend, keeping a `large-v3-turbo` GGML model resident in VRAM (works on AMD
-    with no CUDA/ROCm requirement).
+    backend, keeping a `large-v3-turbo` GGML model resident in VRAM. Vulkan is
+    cross-vendor, so one binary covers **AMD, Nvidia, and Intel** GPUs with no
+    CUDA/ROCm requirement — and all features (GPU ASR + the GPU-only live pill)
+    work on any of them. For maximum per-vendor throughput you may instead supply
+    a **CUDA** (Nvidia) or **SYCL** (Intel) build — see [GPU backends](#gpu-backends--amd--nvidia--intel) below.
   - **CPU** — `faster-whisper` (`small`, int8) in-process, the guaranteed-works
-    baseline and automatic fallback.
+    baseline and automatic fallback. Runs on any modern x86-64 CPU — **AMD or
+    Intel** — auto-using AVX2/AVX-512 where available.
   - `engine = auto` tries GPU first and degrades to CPU on any Vulkan/init
     failure, emitting a one-time "using CPU" toast — words are never lost.
 - **Silence trimming (VAD)** — Silero VAD (via faster-whisper's vendored,
@@ -114,16 +118,50 @@ tools/whisper/                whisper-server.exe goes here (gitignored)
 
 ## Requirements
 
-- **Windows 11.** GPU path needs a Vulkan-capable GPU (developed on an AMD
-  RX 6800 XT); CPU path works on any machine.
+- **Windows 11.** GPU path needs a Vulkan-capable GPU — **AMD, Nvidia, or
+  Intel** (developed/verified on an AMD RX 6800 XT; the Nvidia and Intel GPU
+  paths are documented from whisper.cpp's backend-independent interface, **not
+  hardware-tested here**). CPU path works on any x86-64 machine — AMD or Intel.
 - **.NET 8 SDK** (host targets `net8.0-windows`, WPF).
 - **Python 3.11+** for the sidecar.
 - **Ollama** running locally (spec recommends ≥ 0.12.11) with the cleanup model
   pulled: `ollama pull qwen2.5:7b`.
-- **For the GPU engine:** a Vulkan whisper.cpp `whisper-server.exe` in
-  `tools/whisper/` and a GGML model at `models/ggml-large-v3-turbo.bin`. Both are
-  gitignored — download or build them yourself (see `docs/spec.md` §7 for AMD
-  build notes). Without them, `engine=auto` simply falls back to CPU.
+- **For the GPU engine:** a whisper.cpp `whisper-server.exe` in `tools/whisper/`
+  and a GGML model at `models/ggml-large-v3-turbo.bin`. Both are gitignored —
+  download or build them yourself (see [GPU backends](#gpu-backends--amd--nvidia--intel)
+  for which build to grab per vendor). Without them, `engine=auto` simply falls
+  back to CPU.
+
+## GPU backends (AMD · Nvidia · Intel)
+
+The GPU engine just spawns whatever `whisper-server.exe` you place in
+`tools/whisper/` and talks HTTP to it — it does not care which backend that
+binary was built with. So the backend is chosen entirely by *which build you
+supply*:
+
+| Your GPU | Low-friction (all features) | Optional fast-path |
+|---|---|---|
+| **AMD** | Vulkan build | — (ROCm on Windows is unreliable) |
+| **Nvidia** | Vulkan build | **CUDA** build (`-DGGML_CUDA=1`) |
+| **Intel** (Arc / Iris Xe) | Vulkan build | **SYCL** build (`-DGGML_SYCL=1`) |
+
+- **Vulkan is the default recommendation for every vendor** — one cross-vendor
+  binary, no toolkit install, and it delivers *all* features (GPU ASR and the
+  GPU-only live pill). Get a prebuilt Vulkan binary or build upstream
+  [whisper.cpp](https://github.com/ggml-org/whisper.cpp) with `-DGGML_VULKAN=1`.
+- **CUDA / SYCL** builds are only *faster* on their vendor's hardware, not more
+  capable. Build upstream whisper.cpp with `-DGGML_CUDA=1` (Nvidia) or
+  `-DGGML_SYCL=1` (Intel oneAPI), or grab a matching prebuilt release.
+- **Multi-GPU machines** (e.g. laptop iGPU + dGPU): the Vulkan build honors the
+  `GGML_VK_VISIBLE_DEVICES` env var and the CUDA build honors
+  `CUDA_VISIBLE_DEVICES`; the sidecar inherits the host environment, so you can
+  pin the right device without any code change.
+
+> **Tested-hardware note:** DeadAir is developed on an AMD RX 6800 XT. The
+> AMD-Vulkan and CPU paths are exercised directly; the Nvidia (Vulkan/CUDA) and
+> Intel-GPU (Vulkan/SYCL) paths are documented from whisper.cpp's published,
+> backend-independent CLI/HTTP contract and have **not** been tested on that
+> hardware here. Reports welcome.
 
 ## Setup
 
