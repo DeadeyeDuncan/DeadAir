@@ -26,7 +26,7 @@ public partial class RecordingIndicatorWindow : Window
     private const double NebulaDrift = 0.33;                 // 3x-slowed drift
     private const double SeedBase = 3.7, SeedStep = 5.7, HazeSeed = 34.7;
     private const int NebulaSegs = 48, HazeSegs = 16;        // 48 renders the voice-gated 2u turbulence octave (~40px waves); haze stays calm at 16
-    private const double TurbScrollRate = 0.00035;           // u per phase-ms: octave crosses ~1/3 of the pill per second at full voice
+    private const double TurbScrollRate = 0.00035;           // octave pattern shift per phase-ms; the 2u term halves the u-space translation -> ~1/6 pill per second at full voice, x WiggleSpeed dial
     private const int NebulaStrands = 6;
     // Mic loudness -> fan: smoothed energy drives spread width A and brightness.
     private const double EnergyAttack = 0.20, EnergyRelease = 0.05;

@@ -1,7 +1,17 @@
 # DeadAir — Nebula Scope Skin (second pill-oscilloscope skin, DeadEye nebula style)
 
+> **SUPERSEDED (2026-07-17, same day):** the nebula render design below (3-strand
+> bundle riding the live PCM waveform) was rejected at live smoke and replaced by
+> `docs/superpowers/plans/2026-07-17-nebula-look-redesign.md` (+ its T12–T14
+> amendments): nebula draws NO PCM waveform — 6 smooth strands whose fan width,
+> brightness, drift speed, and traveling-wave turbulence are driven by mic
+> loudness; three Settings dials (fan sensitivity / wiggle / wiggle speed); the
+> ignition sweep + pip were removed from nebula (fade-in instead). The skin
+> switch (`Pill.Skin`, Settings dropdown, nebula default) and the palette in
+> this spec remain accurate.
+
 **Date:** 2026-07-17
-**Status:** Design approved — ready for implementation plan
+**Status:** Superseded — see banner (was: Design approved)
 **Look source:** DeadEye Nebula edge style, final tamed form (`feat/nebula-lit-bundles` `819ecbf`; helpers + lit-strand pass in `claude-memory-compiler/scripts/templates/graph_explorer.html`, WISP-HELPERS block + `wispLitStrand`).
 **Extends:** `2026-07-16-lantern-scope-design.md` (the Lantern skin, shipped on `feat/lantern-scope`, user-smoked PASS).
 
