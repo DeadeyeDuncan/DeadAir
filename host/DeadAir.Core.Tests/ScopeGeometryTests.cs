@@ -4,52 +4,6 @@ namespace DeadAir.Core.Tests;
 
 public class ScopeGeometryTests
 {
-    // ---- Envelope: taper sin(pi*u), exactly zero at/outside both endpoints ----
-
-    [Theory]
-    [InlineData(0.0)]
-    [InlineData(1.0)]
-    [InlineData(-0.1)]
-    [InlineData(1.1)]
-    public void Envelope_IsExactlyZeroAtAndOutsideEndpoints(double u)
-        => Assert.Equal(0.0, ScopeGeometry.Envelope(u));
-
-    [Fact]
-    public void Envelope_PeaksAtMidpoint()
-        => Assert.Equal(1.0, ScopeGeometry.Envelope(0.5), 12);
-
-    [Fact]
-    public void Envelope_IsSymmetric()
-        => Assert.Equal(ScopeGeometry.Envelope(0.25), ScopeGeometry.Envelope(0.75), 12);
-
-    [Fact]
-    public void Envelope_QuarterPointMatchesSinPiOver4()
-        => Assert.Equal(0.70711, ScopeGeometry.Envelope(0.25), 4);
-
-    // ---- Breathe: 0.72 + 0.28*sin(t/900), bounded [0.44, 1.0] ----
-
-    [Fact]
-    public void Breathe_AtZeroIsBaseline()
-        => Assert.Equal(0.72, ScopeGeometry.Breathe(0), 12);
-
-    [Fact]
-    public void Breathe_PeaksAtQuarterPeriod()
-        => Assert.Equal(1.0, ScopeGeometry.Breathe(900.0 * Math.PI / 2), 12);
-
-    [Fact]
-    public void Breathe_TroughsAtThreeQuarterPeriod()
-        => Assert.Equal(0.44, ScopeGeometry.Breathe(900.0 * 3 * Math.PI / 2), 12);
-
-    [Fact]
-    public void Breathe_StaysBounded()
-    {
-        for (double t = 0; t < 20000; t += 37)
-        {
-            double b = ScopeGeometry.Breathe(t);
-            Assert.InRange(b, 0.44, 1.0);
-        }
-    }
-
     // ---- IgnitionHead: linear 0->1 over IgnitionMs (300), clamped ----
 
     [Theory]
@@ -113,59 +67,6 @@ public class ScopeGeometryTests
             Assert.True(f <= prev, $"fraction rose at t={t}");
             prev = f;
         }
-    }
-
-    // ---- BuildPoints: fixed-x mapping with a visibility window ----
-
-    private static readonly double[] Bump = { 0.0, 0.0, 1.0, 0.0, 0.0 };
-
-    [Fact]
-    public void BuildPoints_MapsSamplesToCanvas()
-    {
-        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 1.0);
-        Assert.Equal(5, pts.Length);
-        Assert.Equal(new[] { 0.0, 25.0, 50.0, 75.0, 100.0 },
-            pts.Select(p => p.X).ToArray());
-        Assert.Equal(20.0, pts[0].Y, 12);   // v=0 -> midline
-        Assert.Equal(0.0, pts[2].Y, 12);    // v=1, amp 1 -> top
-    }
-
-    [Fact]
-    public void BuildPoints_AmpScalesDeflectionNotMidline()
-    {
-        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 0.5);
-        Assert.Equal(20.0, pts[0].Y, 12);   // v=0 stays on the midline
-        Assert.Equal(10.0, pts[2].Y, 12);   // v=1 halved toward midline
-    }
-
-    [Fact]
-    public void BuildPoints_AmpAtReceivesU()
-    {
-        var seen = new List<double>();
-        ScopeGeometry.BuildPoints(Bump, 100, 40, u => { seen.Add(u); return 1.0; });
-        Assert.Equal(new[] { 0.0, 0.25, 0.5, 0.75, 1.0 }, seen.ToArray());
-    }
-
-    [Fact]
-    public void BuildPoints_VisibleToOmitsPointsBeyondHead()
-    {
-        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 1.0, visibleTo: 0.5);
-        Assert.Equal(new[] { 0.0, 25.0, 50.0 }, pts.Select(p => p.X).ToArray());
-    }
-
-    [Fact]
-    public void BuildPoints_VisibleFromKeepsFixedXPositions()
-    {
-        // Retract: left edge slides right; surviving xs are NOT remapped to 0.
-        var pts = ScopeGeometry.BuildPoints(Bump, 100, 40, _ => 1.0, visibleFrom: 0.5);
-        Assert.Equal(new[] { 50.0, 75.0, 100.0 }, pts.Select(p => p.X).ToArray());
-    }
-
-    [Fact]
-    public void BuildPoints_FewerThanTwoSamplesIsEmpty()
-    {
-        Assert.Empty(ScopeGeometry.BuildPoints(Array.Empty<double>(), 100, 40, _ => 1.0));
-        Assert.Empty(ScopeGeometry.BuildPoints(new[] { 0.7 }, 100, 40, _ => 1.0));
     }
 
     // ---- WispEnv: nebula strand envelope sin(pi*u)^0.75, exact-zero endpoints ----

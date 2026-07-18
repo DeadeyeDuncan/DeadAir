@@ -37,12 +37,6 @@
                 <ComboBoxItem Content="Polished"/>
             </ComboBox>
 
-            <TextBlock FontWeight="Bold" Text="Scope skin"/>
-            <ComboBox x:Name="SkinBox" Margin="0,4,0,12">
-                <ComboBoxItem Content="nebula"/>
-                <ComboBoxItem Content="lantern"/>
-            </ComboBox>
-
             <TextBlock FontWeight="Bold" Text="Nebula fan sensitivity"/>
             <DockPanel Margin="0,4,0,12">
                 <TextBlock x:Name="FanGainValue" DockPanel.Dock="Right" Width="36"
