@@ -44,6 +44,17 @@ of seconds.
     through un-cleaned, and if Ollama is down or slow the raw transcript is
     injected anyway (connect attempts are capped so a stopped Ollama fails over
     near-instantly).
+- **Output language (translation)** — optionally have your English dictation
+  injected in another language (v1 ships English + Spanish in the UI; the
+  config value is free-form). Translation happens in the same single local
+  LLM call as cleanup — no second LLM round-trip, nothing leaves your machine.
+  (One caveat: short phrases that normally skip the LLM entirely do make the
+  call when translating, so they gain that one call's latency.)
+  Faithful/Polished still applies (literal vs natural translation), dictionary
+  and technical terms stay in English, and the skip-guard is bypassed so short
+  phrases translate too. If Ollama is unavailable the raw English is injected
+  with a "translation skipped" toast. Toggle from the tray ("Translate →
+  Spanish") or pick the language in Settings.
 - **Cursor injection** — clipboard-paste first (fast, format-safe), Unicode
   `SendInput` as a fallback (each UTF-16 code unit is sent, so emoji and other
   astral-plane characters go through as surrogate pairs). On a failed insert the
@@ -191,7 +202,7 @@ directory, so Debug vs Release build depth doesn't matter.
 - **Tray menu:** toggle **Polished mode** (unchecked = Faithful), open
   **Settings…**, or **Exit**.
 - **Settings** lets you pick the ASR engine (auto/GPU/CPU), models, Ollama URL,
-  mic device, and edit the custom dictionary.
+  mic device, output language, and edit the custom dictionary.
 
 ## Configuration
 
@@ -209,6 +220,7 @@ options:
 | `ollama` | `url` / `model` | `http://127.0.0.1:11434` / `qwen2.5:7b` | `127.0.0.1`, not `localhost` (avoids a Winsock IPv6-first retry stall). |
 | `ollama` | `numCtx`, `temperature`, `keepAlive`, `timeoutSeconds` | 8192, 0.1, `30m`, 20 | |
 | `cleanup` | `mode` / `skipGuardChars` | `Faithful` / 50 | Transcripts shorter than the guard bypass the LLM. |
+| `cleanup` | `outputLanguage` | `English` | Target language for injected text. `English` = translation off. Free-form (UI lists English + Spanish). |
 | `dictionary` | | `[]` | Terms to preserve exactly. |
 
 **Reserved but not yet honored** (persisted, currently ignored):

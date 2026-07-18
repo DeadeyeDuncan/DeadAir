@@ -152,7 +152,10 @@ auto-repeat key-down.
 **SidecarManager** — Spawns `python asr_sidecar.py` (or a packaged sidecar exe),
 wires stdin/stdout JSON-lines, forwards commands, parses events, monitors
 liveness, and restarts on crash (capped retry with backoff). Surfaces sidecar
-state to the tray. Sends `config` on startup and whenever settings change.
+state to the tray. Sends `config` on startup/restart; on settings saves it is sent only when an
+ASR-relevant field (engine, models, mic, dictionary, GPU settings, partials)
+actually changed — host-only saves (cleanup mode, output language, Ollama,
+pill) skip the send so the ASR engine is not torn down and recreated.
 
 **OllamaClient** — `HttpClient` to `POST /api/generate` on
 `http://localhost:11434`, `stream:true`. Uses the active mode's system prompt,
@@ -162,6 +165,15 @@ inputs) and are injected raw. On timeout / connection failure, return the raw
 transcript unchanged and signal "cleanup skipped". *(Planned, Phase 4: detect
 at startup whether the configured model is pulled and prompt/auto-pull — today
 a missing model surfaces as "cleanup skipped" raw passthrough.)*
+
+**Output language (added 2026-07-18):** when `cleanup.outputLanguage` is a
+language other than English, the system prompt gains a translation directive
+(`prompts.translationTemplate`, `{language}`/`{style}` tokens — style tracks
+Faithful=literal / Polished=natural) and the skip-guard is disabled so short
+utterances still translate. Dictionary/technical terms stay untranslated. On
+LLM failure the raw English transcript is injected with a "translation
+skipped" toast (the toast makes no injection claim — it fires before the
+injector runs).
 
 **TextInjector** — Dual strategy, in order:
 1. **Clipboard-paste (default):** save current clipboard → set transcript →
@@ -283,8 +295,8 @@ keys, enum values PascalCase):
     "partialWindowSeconds": 30
   },
   "ollama": { "url": "http://localhost:11434", "model": "qwen2.5:7b", "numCtx": 8192, "temperature": 0.1, "timeoutSeconds": 20, "keepAlive": "30m" },
-  "cleanup": { "mode": "Faithful", "skipGuardChars": 50 },
-  "prompts": { "faithful": "<full text in §5>", "polished": "<full text in §5>" },
+  "cleanup": { "mode": "Faithful", "skipGuardChars": 50, "outputLanguage": "English" },
+  "prompts": { "faithful": "<full text in §5>", "polished": "<full text in §5>", "translationTemplate": "<{language}/{style} directive — defaults in AppConfig.PromptsConfig>" },
   "dictionary": ["DeadMind", "gfx1030", "faster-whisper"],
   "mic": "default",
   "inject": { "method": "auto", "pasteHotkey": "Ctrl+V", "restoreClipboardDelayMs": 150 },
@@ -352,14 +364,15 @@ backend-independent interface, not hardware-tested here.
 
 | Failure | Behavior |
 |---|---|
-| Ollama down / timeout | Inject **raw transcript**; toast "cleanup skipped". |
+| Ollama down / timeout | Inject **raw transcript**; toast "cleanup skipped" ("translation skipped" when translating). |
 | GPU/Vulkan init fails | Sidecar auto-selects CPU engine; emits `degraded`; host toasts once. |
 | Sidecar crash | SidecarManager restarts (backoff); current utterance lost (audio not persisted); tray shows error. |
 | whisper-server dies | GpuEngine restarts it or falls to CPU + `degraded`. |
 | Foreground window elevated (UIPI) | Inject fails silently → text left on clipboard + toast "press Ctrl+V". |
 | Empty/no-speech transcript | Inject nothing; brief tray flash. |
 | Transcript < skipGuardChars | Bypass LLM; inject raw. |
-| Ollama model not pulled | Today: cleanup fails → raw transcript injected + "cleanup skipped" toast. Planned (Phase 4): detect at startup, prompt/auto-pull. |
+| Transcript < skipGuardChars, translating | LLM still called (guard bypassed) so the utterance is translated. |
+| Ollama model not pulled | Today: cleanup fails → raw transcript injected + "cleanup skipped" ("translation skipped" when translating) toast. Planned (Phase 4): detect at startup, prompt/auto-pull. |
 | Emoji / supra-BMP chars via SendInput | Split into UTF-16 surrogate pairs (two INPUT events). |
 
 ---

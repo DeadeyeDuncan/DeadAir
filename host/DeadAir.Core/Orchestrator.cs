@@ -119,10 +119,16 @@ public sealed class Orchestrator(
         try
         {
             var asrMs = _clock.ElapsedMilliseconds;
+            // Snapshot before the await: the user can flip the tray toggle
+            // while cleanup is in flight, and the toast must describe the
+            // operation that was actually attempted.
+            var translating = config.Cleanup.TranslationActive;
             var result = await cleaner.CleanAsync(e.Text ?? "", Mode);
             var cleanMs = _clock.ElapsedMilliseconds - asrMs;
             if (result.Skipped && result.Reason != "below skip guard")
-                notifier.Toast($"cleanup skipped: {result.Reason}");
+                notifier.Toast(translating
+                    ? $"translation skipped: {result.Reason}"
+                    : $"cleanup skipped: {result.Reason}");
 
             // Only advance the state if this utterance still owns it — an
             // unsolicited reset (error/empty) may have moved on, possibly into

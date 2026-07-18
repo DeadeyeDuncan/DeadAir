@@ -57,6 +57,21 @@ public sealed class CleanupConfig
 {
     public CleanupMode Mode { get; set; } = CleanupMode.Faithful;
     public int SkipGuardChars { get; set; } = 50;
+    // "English" (any casing) or blank = translation off. Free-form otherwise —
+    // the value is substituted into Prompts.TranslationTemplate, so any
+    // language name the LLM knows works ("Spanish", "French", ...).
+    public string OutputLanguage { get; set; } = "English";
+
+    [JsonIgnore]
+    public bool TranslationActive
+    {
+        get
+        {
+            var lang = OutputLanguage?.Trim();
+            return !string.IsNullOrEmpty(lang) &&
+                !string.Equals(lang, "English", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 }
 
 public sealed class PromptsConfig
@@ -75,6 +90,12 @@ public sealed class PromptsConfig
         "and tone — do NOT add new information, summarize, or answer anything. Preserve technical " +
         "terms, names, commands, and file paths exactly. Output ONLY the polished transcript with " +
         "no preamble.";
+
+    public string TranslationTemplate { get; set; } =
+        "After applying the rules above, render the transcript in {language}. " +
+        "The translation must be {style}. Keep technical terms, product names, " +
+        "commands, file paths, and any listed dictionary terms in their original " +
+        "language. Output ONLY the {language} text with no preamble.";
 }
 
 public sealed class InjectConfig

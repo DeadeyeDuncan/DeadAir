@@ -20,6 +20,8 @@ public partial class App : Application
     private TaskbarIcon _tray = null!;
     private TextWriter _log = null!;
     private System.Windows.Controls.MenuItem _modeMenuItem = null!;
+    private System.Windows.Controls.MenuItem _translateMenuItem = null!;
+    private string _translateLanguage = "Spanish";
     private RecordingIndicatorWindow _indicator = null!;
     private Mutex _singleInstance = null!;
 
@@ -186,6 +188,24 @@ public partial class App : Application
         mode.Unchecked += (_, _) => _orchestrator.Mode = CleanupMode.Faithful;
         _modeMenuItem = mode;
 
+        // Like the Polished toggle this is transient: it flips the live config
+        // object (OllamaClient reads it per-utterance) but persists only when
+        // Settings is next saved.
+        _translateLanguage = _config.Cleanup.TranslationActive
+            ? _config.Cleanup.OutputLanguage.Trim() : "Spanish";
+        var translate = new System.Windows.Controls.MenuItem
+        {
+            Header = $"Translate → {_translateLanguage}",
+            IsCheckable = true,
+            IsChecked = _config.Cleanup.TranslationActive,
+            Style = itemStyle,
+        };
+        translate.Checked += (_, _) =>
+            _config.Cleanup.OutputLanguage = _translateLanguage;
+        translate.Unchecked += (_, _) =>
+            _config.Cleanup.OutputLanguage = "English";
+        _translateMenuItem = translate;
+
         var settings = new System.Windows.Controls.MenuItem
         { Header = "Settings…", Style = itemStyle };
         settings.Click += (_, _) =>
@@ -211,6 +231,7 @@ public partial class App : Application
         };
 
         menu.Items.Add(mode);
+        menu.Items.Add(translate);
         menu.Items.Add(settings);
         menu.Items.Add(new System.Windows.Controls.Separator
         {
@@ -227,8 +248,17 @@ public partial class App : Application
             ConfigStore.Save(_config);
             _orchestrator.Mode = _config.Cleanup.Mode; // apply live, no restart needed
             _modeMenuItem.IsChecked = _config.Cleanup.Mode == CleanupMode.Polished;
+            if (_config.Cleanup.TranslationActive)
+                _translateLanguage = _config.Cleanup.OutputLanguage.Trim();
+            _translateMenuItem.Header = $"Translate → {_translateLanguage}";
+            // Setter fires Checked/Unchecked; both handlers re-assign the same
+            // value OutputLanguage already holds, so this is idempotent.
+            _translateMenuItem.IsChecked = _config.Cleanup.TranslationActive;
             _indicator.ApplyPillTuning(_config.Pill);
-            await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
+            // Host-only changes (cleanup mode, output language, Ollama, pill,
+            // prompts) must not bounce the ASR engine — the manager skips the
+            // send unless an ASR-relevant field changed.
+            await _sidecar.SendConfigIfChangedAsync(_config); // hot-reload sidecar side
         }
         catch (Exception ex)
         {

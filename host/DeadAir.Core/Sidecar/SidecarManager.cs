@@ -101,8 +101,30 @@ public sealed class SidecarManager : ISidecarControl, IDisposable
         if (!_shuttingDown) await LaunchAsync();
     }
 
-    public Task SendConfigAsync(AppConfig c) =>
-        SendAsync(ConfigCommand.From(c));
+    private string _lastSentConfigJson = "";
+
+    public async Task SendConfigAsync(AppConfig c)
+    {
+        var cmd = ConfigCommand.From(c);
+        await SendAsync(cmd);
+        // Only a config the sidecar actually received updates the baseline —
+        // a failed send must leave it stale so the next save re-sends.
+        _lastSentConfigJson = JsonSerializer.Serialize(cmd);
+    }
+
+    /// <summary>Send config only if it differs from the last successfully
+    /// sent payload. Keeps host-only settings saves (cleanup/Ollama/pill)
+    /// from bouncing the sidecar's ASR engine. The baseline lives here, not
+    /// in the App, because LaunchAsync/RestartAsync also send config — every
+    /// successful send through this class refreshes the same baseline, so a
+    /// crash-restart during a failed save can never strand it.</summary>
+    public async Task<bool> SendConfigIfChangedAsync(AppConfig c)
+    {
+        if (JsonSerializer.Serialize(ConfigCommand.From(c)) == _lastSentConfigJson)
+            return false;
+        await SendConfigAsync(c);
+        return true;
+    }
 
     public Task StartUtteranceAsync() => SendAsync(new SimpleCommand("start"));
     public Task StopUtteranceAsync() => SendAsync(new SimpleCommand("stop"));

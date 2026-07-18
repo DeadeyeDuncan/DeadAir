@@ -37,6 +37,12 @@
                 <ComboBoxItem Content="Polished"/>
             </ComboBox>
 
+            <TextBlock FontWeight="Bold" Text="Output language"/>
+            <ComboBox x:Name="OutputLanguageBox" Margin="0,4,0,12">
+                <ComboBoxItem Content="English"/>
+                <ComboBoxItem Content="Spanish"/>
+            </ComboBox>
+
             <TextBlock FontWeight="Bold" Text="Nebula fan sensitivity"/>
             <DockPanel Margin="0,4,0,12">
                 <TextBlock x:Name="FanGainValue" DockPanel.Dock="Right" Width="36"

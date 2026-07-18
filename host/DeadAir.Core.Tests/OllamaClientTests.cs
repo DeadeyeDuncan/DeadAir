@@ -275,4 +275,50 @@ public class OllamaClientTests
         Assert.True(sw.ElapsedMilliseconds < 1500,
             $"expected fail-fast passthrough well under 1500ms, took {sw.ElapsedMilliseconds}ms");
     }
+
+    [Fact]
+    public async Task EmptyTranscript_Translating_SkipsLlm()
+    {
+        // A null "final" payload reaches CleanAsync as "" (Orchestrator uses
+        // e.Text ?? ""). Never worth an LLM call, translating or not — and the
+        // "below skip guard" reason keeps the Orchestrator's toast suppressed.
+        var handler = new StubHandler(_ => throw new Exception("must not call"));
+        var cfg = Cfg();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        var client = new OllamaClient(cfg, handler);
+        var r = await client.CleanAsync("", CleanupMode.Faithful);
+        Assert.True(r.Skipped);
+        Assert.Equal("below skip guard", r.Reason);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
+    public async Task ShortTranscript_Translating_StillCallsLlm()
+    {
+        var ndjson = "{\"response\":\"hola\",\"done\":true}\n";
+        var handler = new CapturingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent(ndjson, Encoding.UTF8) });
+        var cfg = Cfg();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        var client = new OllamaClient(cfg, handler);
+        var r = await client.CleanAsync("hi there", CleanupMode.Faithful);
+        Assert.False(r.Skipped);
+        Assert.Equal("hola", r.Text);
+        using var doc = JsonDocument.Parse(handler.LastBody!);
+        Assert.Contains("render the transcript in Spanish",
+            doc.RootElement.GetProperty("system").GetString());
+    }
+
+    [Fact]
+    public async Task ShortTranscript_EnglishOutput_StillSkipsLlm()
+    {
+        var handler = new StubHandler(_ => throw new Exception("must not call"));
+        var cfg = Cfg();
+        cfg.Cleanup.OutputLanguage = "english";
+        var client = new OllamaClient(cfg, handler);
+        var r = await client.CleanAsync("hi there", CleanupMode.Faithful);
+        Assert.True(r.Skipped);
+        Assert.Equal("hi there", r.Text);
+        Assert.Equal(0, handler.Calls);
+    }
 }
