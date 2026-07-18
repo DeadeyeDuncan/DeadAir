@@ -15,8 +15,6 @@ public partial class RecordingIndicatorWindow : Window
     private const int ScopeSamples = 296;      // one sample per horizontal px
     private const double ScopeWidth = 296, ScopeHeight = 40;
     private const int InterimMaxChars = 46;
-    private const double CoreOpacity = 0.95, GlowOpacity = 0.30;
-    private const double PipFadeMs = 150.0;
 
     // Nebula skin (spec 2026-07-17, redesign amendment): a faithful DeadEye
     // connection-strand port — 6 smooth wisp strands + a 9px haze understroke
@@ -41,8 +39,8 @@ public partial class RecordingIndicatorWindow : Window
     [DllImport("user32.dll")]
     private static extern int SetWindowLongW(nint hWnd, int nIndex, int value);
 
-    /// <summary>Lantern lifecycle (spec 2026-07-16): ignition sweep on show,
-    /// live trace, retract-then-hide on stop. Shared by both skins.</summary>
+    /// <summary>Nebula lifecycle: fade-in on show, live drift, retract-then-hide
+    /// on stop.</summary>
     private enum ScopeState { Idle, Igniting, Live, Retracting }
 
     private readonly WaveformRingBuffer _wave = new(ScopeSamples);
@@ -53,13 +51,12 @@ public partial class RecordingIndicatorWindow : Window
     private string _lastPartial = "";
 
     private ScopeState _state = ScopeState.Idle;
-    private long _showT0, _stateT0;   // Environment.TickCount64 at show / state entry
+    private long _stateT0;   // Environment.TickCount64 at state entry
     // Rightmost drawable u. Tracks the beam head during ignition and is left
     // frozen if a retract starts mid-ignition, so the retract can't reveal
     // trace the beam never wrote.
     private double _visibleTo = 1.0;
     private bool _tickHooked;
-    private string _skin = "nebula";  // "nebula" | "lantern" (spec 2026-07-17 default)
     private double _nebEnergy;         // smoothed mic loudness (asymmetric follower)
     private double _nebPhase;          // accumulated drift phase (voice-speed clock)
     private long _nebLastT;            // last nebula frame time for dt
@@ -73,7 +70,6 @@ public partial class RecordingIndicatorWindow : Window
         _dim.Freeze();
         _hot.Freeze();
         _strands = new[] { StrandHot, Strand1, Strand2, Strand3, Strand4, Strand5 };
-        ApplySkinVisibility();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -108,14 +104,6 @@ public partial class RecordingIndicatorWindow : Window
             InterimText.Inlines.Add(new Run(layout.Hot) { Foreground = _hot });
     }
 
-    /// <summary>Select the scope skin. Unknown values fall back to nebula
-    /// (the default) — same degrade-don't-crash posture as the hotkey.</summary>
-    public void SetSkin(string skin)
-    {
-        _skin = skin == "lantern" ? "lantern" : "nebula";
-        ApplySkinVisibility();
-    }
-
     /// <summary>Apply the nebula tuning dials from config, range-clamped
     /// (degrade-don't-crash: hand-edited config lands in the legal range).</summary>
     public void ApplyPillTuning(PillConfig pill)
@@ -123,24 +111,6 @@ public partial class RecordingIndicatorWindow : Window
         _fanGain = Math.Clamp(pill.FanGain, 0.5, 8.0);
         _turbSpan = Math.Clamp(pill.Wiggle, 0.0, 1.5);
         _wiggleSpeed = Math.Clamp(pill.WiggleSpeed, 0.0, 4.0);
-    }
-
-    private bool Nebula => _skin == "nebula";
-
-    private void ApplySkinVisibility()
-    {
-        var neb = Nebula ? Visibility.Visible : Visibility.Collapsed;
-        var lan = Nebula ? Visibility.Collapsed : Visibility.Visible;
-        HazeLine.Visibility = neb;
-        foreach (var s in _strands) s.Visibility = neb;
-        GlowLine.Visibility = lan;
-        ScopeLine.Visibility = lan;
-        // A live lantern->nebula switch must not leave the lantern's pip
-        // stranded on the nebula skin; the reverse switch mid-ignition restores
-        // it (the Igniting tick re-places it next frame). Live/Retracting stay
-        // pip-less — the 150ms fade window is state-timed and effectively over.
-        if (Nebula) BeamPip.Visibility = Visibility.Collapsed;
-        else if (_state == ScopeState.Igniting) BeamPip.Visibility = Visibility.Visible;
     }
 
     public void ShowIndicator()
@@ -153,21 +123,15 @@ public partial class RecordingIndicatorWindow : Window
         InterimText.Inlines.Clear();
 
         _state = ScopeState.Igniting;   // re-show mid-retract re-ignites
-        _showT0 = _stateT0 = Environment.TickCount64;
+        _stateT0 = Environment.TickCount64;
         _visibleTo = 0.0;
-        ScopeLine.Opacity = CoreOpacity;
-        GlowLine.Opacity = GlowOpacity;
         HazeLine.Opacity = HazeOpacity;
         foreach (var s in _strands) s.Opacity = StrandOpacity;
         StrandHot.Opacity = HotOpacity;
         var empty = new PointCollection();
         empty.Freeze();   // frozen: safely shared across polylines
-        ScopeLine.Points = empty;
-        GlowLine.Points = empty;
         HazeLine.Points = empty;
         foreach (var s in _strands) s.Points = empty;
-        BeamPip.Visibility = Nebula ? Visibility.Collapsed : Visibility.Visible;
-        BeamPip.Opacity = 1.0;
         if (!_tickHooked)
         {
             CompositionTarget.Rendering += OnRenderTick;
@@ -188,7 +152,6 @@ public partial class RecordingIndicatorWindow : Window
         if (_state == ScopeState.Retracting) return;
         _state = ScopeState.Retracting;   // _visibleTo keeps any mid-ignition cap
         _stateT0 = Environment.TickCount64;
-        BeamPip.Visibility = Visibility.Collapsed;
     }
 
     private void UnhookTick()
@@ -202,7 +165,6 @@ public partial class RecordingIndicatorWindow : Window
     {
         long now = Environment.TickCount64;
         double tState = now - _stateT0;
-        double breathe = ScopeGeometry.Breathe(now - _showT0);   // lantern only
 
         switch (_state)
         {
@@ -210,11 +172,10 @@ public partial class RecordingIndicatorWindow : Window
             {
                 double head = ScopeGeometry.IgnitionHead(tState);
                 _visibleTo = head;
-                RenderFrame(now, breathe, head, 0.0, head, 1.0);
-                if (!Nebula) PlacePip();
+                RenderFrame(now, 0.0, 1.0);
                 if (head >= 1)
                 {
-                    _state = ScopeState.Live;   // pip fade timing starts here
+                    _state = ScopeState.Live;
                     _stateT0 = now;
                     _visibleTo = 1.0;
                 }
@@ -222,21 +183,14 @@ public partial class RecordingIndicatorWindow : Window
             }
             case ScopeState.Live:
             {
-                RenderFrame(now, breathe, 1.0, 0.0, 1.0, 1.0);
-                if (BeamPip.Visibility == Visibility.Visible)
-                {
-                    double pip = 1 - tState / PipFadeMs;
-                    if (pip <= 0) BeamPip.Visibility = Visibility.Collapsed;
-                    else { BeamPip.Opacity = pip; PlacePip(); }
-                }
+                RenderFrame(now, 0.0, 1.0);
                 return;
             }
             case ScopeState.Retracting:
             {
                 double rf = ScopeGeometry.RetractFraction(tState);
                 double visibleFrom = 1 - rf;
-                double vCap = Nebula ? 1.0 : _visibleTo;
-                if (rf <= 0 || visibleFrom >= vCap)
+                if (rf <= 0 || visibleFrom >= 1.0)
                 {
                     _state = ScopeState.Idle;
                     Hide();
@@ -244,7 +198,7 @@ public partial class RecordingIndicatorWindow : Window
                     return;
                 }
                 // Length and alpha reach zero together — no pop (spec).
-                RenderFrame(now, breathe, 1.0, visibleFrom, _visibleTo, rf);
+                RenderFrame(now, visibleFrom, rf);
                 return;
             }
             default:
@@ -252,57 +206,38 @@ public partial class RecordingIndicatorWindow : Window
         }
     }
 
-    /// <summary>One frame for the active skin. head is 1 outside ignition
-    /// (IgnitionAmp then returns 1 for every u); fade is 1 outside retract
-    /// and scales each skin element's base opacity during it.</summary>
-    private void RenderFrame(long now, double breathe, double head,
-        double visibleFrom, double visibleTo, double fade)
+    /// <summary>One nebula frame. fade is 1 outside retract and scales each
+    /// strand's base opacity during it; visibleFrom slides the left edge in as
+    /// the pill retracts.</summary>
+    private void RenderFrame(long now, double visibleFrom, double fade)
     {
-        if (Nebula)
+        double dt = Math.Clamp(now - _nebLastT, 0, 100);   // hitch clamp (DeadEye precedent)
+        _nebLastT = now;
+        // Mic loudness -> asymmetric follower (fast swell, slow settle) -> fan width + glow.
+        double raw = ScopeGeometry.MeanAbs(_wave.Values);
+        _nebEnergy += (raw > _nebEnergy ? EnergyAttack : EnergyRelease) * (raw - _nebEnergy);
+        double enorm = Math.Clamp(_nebEnergy * _fanGain, 0, 1);
+        _nebPhase += dt * NebulaDrift * ScopeGeometry.NebulaPhaseRate(enorm);
+        double tSlow = _nebPhase;
+        double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 5.5..13.0 px
+        double glow = 0.55 + 0.45 * enorm;             // strand brightness, floored
+        // Fade-in from _visibleTo: it freezes the ignition progress if a hide
+        // interrupts the ramp, so the retract fades from the brightness the
+        // strands actually reached.
+        double ign = _visibleTo;
+        double ignFade = ign >= 1 ? 1.0 : ign * ign * (3 - 2 * ign);
+        SetLine(HazeLine, HazeOpacity * (0.5 + 0.5 * enorm) * ignFade * fade,
+            ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, HazeSegs,
+                a * 0.7, tSlow, HazeSeed, 1.0, head: 1.0, visibleFrom, visibleTo: 1.0));
+        for (int s = 0; s < NebulaStrands; s++)
         {
-            double dt = Math.Clamp(now - _nebLastT, 0, 100);   // hitch clamp (DeadEye precedent)
-            _nebLastT = now;
-            // Mic loudness -> asymmetric follower (fast swell, slow settle) -> fan width + glow.
-            double raw = ScopeGeometry.MeanAbs(_wave.Values);
-            _nebEnergy += (raw > _nebEnergy ? EnergyAttack : EnergyRelease) * (raw - _nebEnergy);
-            double enorm = Math.Clamp(_nebEnergy * _fanGain, 0, 1);
-            _nebPhase += dt * NebulaDrift * ScopeGeometry.NebulaPhaseRate(enorm);
-            double tSlow = _nebPhase;
-            double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 5.5..13.0 px
-            double glow = 0.55 + 0.45 * enorm;             // strand brightness, floored
-            // Fade-in from _visibleTo, not the head param: _visibleTo freezes the
-            // ignition progress if a hide interrupts the ramp, so the retract fades
-            // from the brightness it actually reached (head snaps to 1 in Retracting).
-            double ign = _visibleTo;
-            double ignFade = ign >= 1 ? 1.0 : ign * ign * (3 - 2 * ign);
-            SetLine(HazeLine, HazeOpacity * (0.5 + 0.5 * enorm) * ignFade * fade,
-                ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, HazeSegs,
-                    a * 0.7, tSlow, HazeSeed, 1.0, head: 1.0, visibleFrom, visibleTo: 1.0));
-            for (int s = 0; s < NebulaStrands; s++)
-            {
-                double baseA = (s == 0 ? HotOpacity : StrandOpacity) * glow * ignFade * fade;
-                SetLine(_strands[s], baseA,
-                    ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, NebulaSegs,
-                        a * (0.35 + s * 0.22), tSlow, SeedBase + s * SeedStep,
-                        0.9 + s * 0.13, head: 1.0, visibleFrom, visibleTo: 1.0,
-                        _turbSpan * enorm,     // voice-gated wiggle; haze stays calm
-                        tSlow * TurbScrollRate * _wiggleSpeed));   // traveling wave — scroll speed rides the voice-rated clock
-            }
-        }
-        else
-        {
-            Func<double, double> ampAt = u =>
-                ScopeGeometry.Envelope(u) * breathe
-                * ScopeGeometry.IgnitionAmp(u, head);
-            var raw = ScopeGeometry.BuildPoints(_wave.Values, ScopeWidth,
-                ScopeHeight, ampAt, visibleFrom, visibleTo);
-            var pts = new PointCollection(raw.Length);
-            foreach (var (x, y) in raw) pts.Add(new Point(x, y));
-            pts.Freeze();   // frozen: safely shared by both polylines
-            ScopeLine.Opacity = CoreOpacity * fade;
-            GlowLine.Opacity = GlowOpacity * fade;
-            ScopeLine.Points = pts;
-            GlowLine.Points = pts;
+            double baseA = (s == 0 ? HotOpacity : StrandOpacity) * glow * ignFade * fade;
+            SetLine(_strands[s], baseA,
+                ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, NebulaSegs,
+                    a * (0.35 + s * 0.22), tSlow, SeedBase + s * SeedStep,
+                    0.9 + s * 0.13, head: 1.0, visibleFrom, visibleTo: 1.0,
+                    _turbSpan * enorm,     // voice-gated wiggle; haze stays calm
+                    tSlow * TurbScrollRate * _wiggleSpeed));   // traveling wave — scroll speed rides the voice-rated clock
         }
     }
 
@@ -314,20 +249,5 @@ public partial class RecordingIndicatorWindow : Window
         pts.Freeze();
         line.Opacity = opacity;
         line.Points = pts;
-    }
-
-    /// <summary>Center the pip on the rightmost drawn point (the beam head)
-    /// of the active skin's primary line.</summary>
-    private void PlacePip()
-    {
-        var pts = (Nebula ? StrandHot : ScopeLine).Points;
-        double x = 0, y = ScopeHeight / 2.0;
-        if (pts.Count > 0)
-        {
-            var p = pts[pts.Count - 1];
-            x = p.X; y = p.Y;
-        }
-        Canvas.SetLeft(BeamPip, x - BeamPip.Width / 2);
-        Canvas.SetTop(BeamPip, y - BeamPip.Height / 2);
     }
 }

@@ -1,7 +1,13 @@
 # DeadAir — Lantern Scope (DeadEye trace look for the pill oscilloscope)
 
+> **REMOVED (2026-07-18):** the lantern skin was deleted from the app — nebula
+> is now the sole pill scope. The skin picker (`Pill.Skin`, Settings dropdown)
+> and the lantern-only geometry (`Envelope`/`Breathe`/`BuildPoints`, the
+> phosphor double-stroke, the beam pip) are gone. Retained as historical design
+> record only.
+
 **Date:** 2026-07-16
-**Status:** Design approved — ready for implementation plan
+**Status:** Removed 2026-07-18 (was: Design approved)
 **Look source:** DeadEye Lantern lit-edge traces — `claude-memory-compiler/scripts/templates/graph_explorer.html` (LANTERN-SPEC §5) and `docs/design/lantern-handoff/LANTERN-SPEC.md` in the DeadEye repo.
 
 ## Summary

@@ -6,9 +6,11 @@
 > amendments): nebula draws NO PCM waveform — 6 smooth strands whose fan width,
 > brightness, drift speed, and traveling-wave turbulence are driven by mic
 > loudness; three Settings dials (fan sensitivity / wiggle / wiggle speed); the
-> ignition sweep + pip were removed from nebula (fade-in instead). The skin
-> switch (`Pill.Skin`, Settings dropdown, nebula default) and the palette in
-> this spec remain accurate.
+> ignition sweep + pip were removed from nebula (fade-in instead). **Update
+> 2026-07-18:** the lantern skin was removed and nebula is now the sole pill
+> scope, so the skin switch (`Pill.Skin`, Settings dropdown) is gone; the
+> shipped strand palette is all-red (`#98180F`/`#C11D12`/`#E8382B`), not the
+> historical values in the table below.
 
 **Date:** 2026-07-17
 **Status:** Superseded — see banner (was: Design approved)

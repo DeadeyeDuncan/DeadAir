@@ -7,26 +7,11 @@ namespace DeadAir.Core.Tests;
 public class PillConfigTests
 {
     [Fact]
-    public void Default_Skin_IsNebula()
-        => Assert.Equal("nebula", new AppConfig().Pill.Skin);
-
-    [Fact]
-    public void Skin_RoundTripsThroughJson()
+    public void SidecarConfigCommand_DoesNotCarryThePillConfig()
     {
+        // The pill (nebula dials) is host-only — it must never reach the sidecar.
         var cfg = new AppConfig();
-        cfg.Pill.Skin = "lantern";
-        var back = JsonSerializer.Deserialize<AppConfig>(
-            JsonSerializer.Serialize(cfg))!;
-        Assert.Equal("lantern", back.Pill.Skin);
-    }
-
-    [Fact]
-    public void SidecarConfigCommand_DoesNotCarryTheSkin()
-    {
-        var cfg = new AppConfig();
-        cfg.Pill.Skin = "lantern";
         var json = JsonSerializer.Serialize(ConfigCommand.From(cfg));
-        Assert.DoesNotContain("skin", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("pill", json, StringComparison.OrdinalIgnoreCase);
     }
 
