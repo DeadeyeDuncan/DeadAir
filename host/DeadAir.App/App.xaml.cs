@@ -56,10 +56,15 @@ public partial class App : Application
         _log = TextWriter.Synchronized(new StreamWriter(logStream) { AutoFlush = true });
         _log.WriteLine($"{DateTime.Now:HH:mm:ss} app started, log={logPath}");
 
+        // Skull-waveform identity on the tray; degrade to the system icon if the
+        // loose asset is missing — an icon must never cost us the launch.
+        var trayIconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "deadair.ico");
         _tray = new TaskbarIcon
         {
             ToolTipText = "DeadAir — starting…",
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = File.Exists(trayIconPath)
+                ? new System.Drawing.Icon(trayIconPath)
+                : System.Drawing.SystemIcons.Application,
             ContextMenu = BuildMenu(),
         };
         _tray.ForceCreate();
