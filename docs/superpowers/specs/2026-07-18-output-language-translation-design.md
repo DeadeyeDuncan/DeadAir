@@ -64,20 +64,32 @@ the config it already receives.
 
 The `transcript.Length < SkipGuardChars` early-return applies **only when
 translation is off**. When translating, short utterances still go to the LLM —
-otherwise "yes thanks" would inject as English.
+otherwise "yes thanks" would inject as English. **Exception:** an empty or
+whitespace-only transcript never reaches the LLM regardless of translation (a
+null `final` payload arrives as `""`; POSTing an empty prompt would just burn
+the timeout). *(Amended 2026-07-18 after adversarial plan review.)*
 
 ### 4. Failure path / toast (`Orchestrator`)
 
 The existing cleanup-failure → inject-raw + toast path is reused. Toast wording
-becomes translation-aware: when translation is on, "translation skipped —
-injected English" (exact copy at implementation); otherwise today's "cleanup
-skipped" stays.
+becomes translation-aware: when translation is on, `"translation skipped:
+{reason}"`; otherwise today's `"cleanup skipped: {reason}"` stays. The toast
+deliberately makes no "injected" claim — it fires before injection runs, and a
+failed insert already raises its own press-Ctrl+V toast. *(Amended 2026-07-18
+after adversarial plan review: the earlier "translation skipped — injected
+English" copy claimed completion prematurely.)*
 
 ### 5. UI
 
 - **Settings window:** "Output language" ComboBox (English, Spanish) placed
   with the cleanup-mode control. Applies live via the existing settings-apply
-  path; host-side only, no sidecar reconfigure, no restart.
+  path, no restart. *(Amended 2026-07-18 after adversarial plan review: the
+  save path used to send the sidecar a `config` command unconditionally, and
+  the sidecar recreates its ASR engine on every one — so "no sidecar
+  reconfigure" required a fix, not just a claim. The save handler now skips
+  the sidecar send when the serialized `ConfigCommand` — which carries only
+  ASR-relevant fields — is unchanged, so language-only saves no longer bounce
+  the engine.)*
 - **Tray menu:** "Translate → Spanish" checkable item under the Polished
   toggle. Checked ⇄ `OutputLanguage = "Spanish"`, unchecked ⇄ `"English"`.
   If config holds some other language (hand-edited), the item shows that name

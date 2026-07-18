@@ -16,7 +16,7 @@
 - Words never lost: every failure path still injects *something*.
 - Never modify: `sidecar/**`, existing prompt text (`Prompts.Faithful` / `Prompts.Polished`), existing test assertions (only add).
 - Before every commit: `dotnet build -c Release` and `dotnet test` (both from `host/`) must pass — zero warnings-as-errors changes, zero failed tests.
-- Commit messages: Conventional Commits, subject ≤ 50 chars, trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` (the directing session commits; workers do not run git).
+- Commit messages: Conventional Commits, subject ≤ 50 chars, trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`. The directing session commits and appends that trailer to every commit; workers do not run git. The `git commit -m` blocks in tasks show the subject line only.
 
 ---
 
@@ -133,7 +133,7 @@ Expected: build succeeds, full suite green.
 
 ```bash
 git add host/DeadAir.Core/Config/AppConfig.cs host/DeadAir.Core.Tests/ConfigStoreTests.cs
-git commit -m "feat(config): outputLanguage + translation template"
+git commit -m "feat(config): outputLanguage + prompt template"
 ```
 
 ---
@@ -256,6 +256,22 @@ git commit -m "feat(cleanup): translation directive in prompt"
 
 ```csharp
     [Fact]
+    public async Task EmptyTranscript_Translating_SkipsLlm()
+    {
+        // A null "final" payload reaches CleanAsync as "" (Orchestrator uses
+        // e.Text ?? ""). Never worth an LLM call, translating or not — and the
+        // "below skip guard" reason keeps the Orchestrator's toast suppressed.
+        var handler = new StubHandler(_ => throw new Exception("must not call"));
+        var cfg = Cfg();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        var client = new OllamaClient(cfg, handler);
+        var r = await client.CleanAsync("", CleanupMode.Faithful);
+        Assert.True(r.Skipped);
+        Assert.Equal("below skip guard", r.Reason);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
     public async Task ShortTranscript_Translating_StillCallsLlm()
     {
         var ndjson = "{\"response\":\"hola\",\"done\":true}\n";
@@ -289,11 +305,16 @@ git commit -m "feat(cleanup): translation directive in prompt"
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run (from `host/`): `dotnet test --filter "FullyQualifiedName~OllamaClientTests"`
-Expected: `ShortTranscript_Translating_StillCallsLlm` FAILS (`r.Skipped` is true, reason "below skip guard"); the other new test passes (pins off-behavior).
+Expected: `ShortTranscript_Translating_StillCallsLlm` FAILS (`r.Skipped` is true, reason "below skip guard"); the other two new tests pass already (they pin today's off/empty behavior).
 
 - [ ] **Step 3: Implement** — replace the guard at the top of `CleanAsync`:
 
 ```csharp
+        // Empty/whitespace transcript: never worth an LLM call, translating or
+        // not (a null "final" payload reaches here as ""). Same reason string
+        // as the skip-guard so the Orchestrator's failure toast stays silent.
+        if (string.IsNullOrWhiteSpace(transcript))
+            return new CleanupResult(transcript, true, "below skip guard");
         // Skip-guard only applies when the output language is English: a short
         // utterance still needs the LLM to translate it ("yes thanks" must not
         // inject as English when Spanish is selected).
@@ -305,7 +326,7 @@ Expected: `ShortTranscript_Translating_StillCallsLlm` FAILS (`r.Skipped` is true
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run (from `host/`): `dotnet test --filter "FullyQualifiedName~OllamaClientTests"`
-Expected: PASS (13 total: 11 pre-existing + 2 new).
+Expected: PASS (14 total: 11 pre-existing + 3 new).
 
 - [ ] **Step 5: Full gate + commit**
 
@@ -327,7 +348,7 @@ git commit -m "feat(cleanup): skip-guard off while translating"
 
 **Interfaces:**
 - Consumes (Task 1): `config.Cleanup.TranslationActive` (primary-constructor parameter `config` is already in scope).
-- Produces: toast copy contract — translating: `"translation skipped — injected English: {Reason}"`; not translating: existing `"cleanup skipped: {Reason}"` unchanged.
+- Produces: toast copy contract — translating: `"translation skipped: {Reason}"`; not translating: existing `"cleanup skipped: {Reason}"` unchanged. (Deliberately no "injected English" claim: the toast fires before `InjectAsync` runs, and a failed insert already gets its own Ctrl+V toast.)
 
 - [ ] **Step 1: Write the failing test** — append to `OrchestratorTests` (fakes `FakeSidecar`/`FakeCleaner`/`FakeInjector`/`FakeNotifier` already exist at the top of the file; construct the `Orchestrator` directly to pass a custom config, as `Make` hardcodes `new AppConfig()`):
 
@@ -352,6 +373,9 @@ git commit -m "feat(cleanup): skip-guard off while translating"
         Assert.Contains(n.Toasts, t =>
             t.Contains("translation skipped") && t.Contains("connection refused"));
         Assert.DoesNotContain(n.Toasts, t => t.Contains("cleanup skipped"));
+        // The toast fires before injection, so it must not claim the English
+        // text already landed.
+        Assert.DoesNotContain(n.Toasts, t => t.Contains("injected"));
     }
 ```
 
@@ -372,7 +396,7 @@ with:
 ```csharp
             if (result.Skipped && result.Reason != "below skip guard")
                 notifier.Toast(config.Cleanup.TranslationActive
-                    ? $"translation skipped — injected English: {result.Reason}"
+                    ? $"translation skipped: {result.Reason}"
                     : $"cleanup skipped: {result.Reason}");
 ```
 
@@ -401,7 +425,7 @@ git commit -m "feat(orchestrator): translation-aware skip toast"
 
 **Interfaces:**
 - Consumes (Task 1): `_config.Cleanup.OutputLanguage`.
-- Produces: ComboBox `x:Name="OutputLanguageBox"` seeded `English`/`Spanish`; a hand-edited config language (e.g. `"French"`) appears as a third item and survives open→save; `Select` becomes case-insensitive (safe: every existing caller matches exact-case values).
+- Produces: ComboBox `x:Name="OutputLanguageBox"` seeded `English`/`Spanish`; a hand-edited config language (e.g. `"French"`) appears as a third item and survives open→save; `Select` becomes case-insensitive (safe: every existing caller matches exact-case values). Note: a Settings **save** still runs the whole `OnSettingsSaved` path — Task 6b is what keeps a language-only save from bouncing the sidecar's ASR engine.
 
 No unit-test project covers `DeadAir.App` (WPF); this task is verified by compile + the Task 7 gate + manual smoke. Do not add a UI test framework.
 
@@ -524,6 +548,114 @@ git commit -m "feat(ui): tray translate toggle"
 
 ---
 
+### Task 6b: Skip sidecar reconfig when only host-side settings changed
+
+The sidecar recreates its ASR engine on EVERY `config` command (`sidecar/asr_sidecar/__main__.py`, `cmd == "config"` branch: stops partials, closes engine, cancels capture, respawns — on the GPU path that reloads the model into VRAM). Today every Settings save pays that. `ConfigCommand.From` only carries ASR-relevant fields (engine, models, mic, dictionary, gpu paths/port, partials), so a JSON compare at the save call-site lets host-only changes (output language, cleanup mode, Ollama, pill, prompts) apply without bouncing ASR.
+
+**Files:**
+- Modify: `host/DeadAir.App/App.xaml.cs` (fields ~line 22, `OnStartup` sidecar-launch try ~line 152, `OnSettingsSaved` ~line 233)
+- Test: `host/DeadAir.Core.Tests/SidecarCommandTests.cs`
+
+**Interfaces:**
+- Consumes: `ConfigCommand.From(AppConfig)` (existing, `DeadAir.Core.Sidecar` — already in App's usings).
+- Produces: behavior only — `OnSettingsSaved` calls `_sidecar.SendConfigAsync` solely when the serialized `ConfigCommand` changed since last send.
+
+- [ ] **Step 1: Write the failing test** — append to `SidecarCommandTests` (add `using DeadAir.Core.Config;` and `using System.Text.Json;` to that file if not present):
+
+```csharp
+    [Fact]
+    public void ConfigCommand_Json_UnaffectedByHostOnlySettings()
+    {
+        // Pins the contract Task 6b's dedup relies on: host-only settings must
+        // not change the sidecar config payload, ASR settings must.
+        var cfg = new AppConfig();
+        var before = JsonSerializer.Serialize(ConfigCommand.From(cfg));
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        cfg.Cleanup.Mode = CleanupMode.Polished;
+        cfg.Ollama.Model = "someother:3b";
+        cfg.Prompts.TranslationTemplate = "changed";
+        var after = JsonSerializer.Serialize(ConfigCommand.From(cfg));
+        Assert.Equal(before, after);
+
+        cfg.Asr.Engine = "cpu";
+        Assert.NotEqual(after, JsonSerializer.Serialize(ConfigCommand.From(cfg)));
+    }
+```
+
+- [ ] **Step 2: Run test to verify it passes already** (it pins existing `ConfigCommand.From` behavior — if it FAILS, stop: the dedup premise is wrong, report instead of proceeding)
+
+Run (from `host/`): `dotnet test --filter "FullyQualifiedName~SidecarCommandTests"`
+Expected: PASS.
+
+- [ ] **Step 3: Implement the dedup** — in `App.xaml.cs`:
+
+Field, next to `_translateLanguage`:
+
+```csharp
+    private string _lastSidecarConfigJson = "";
+```
+
+In `OnStartup`, replace:
+
+```csharp
+        try { await _sidecar.LaunchAsync(); }
+        catch (Exception ex)
+        { notifier.Toast($"Sidecar failed to start: {ex.Message}"); }
+```
+
+with:
+
+```csharp
+        try
+        {
+            await _sidecar.LaunchAsync();
+            // LaunchAsync sent the full config; remember what the sidecar has
+            // so host-only settings saves don't bounce the ASR engine.
+            _lastSidecarConfigJson = System.Text.Json.JsonSerializer.Serialize(
+                Core.Sidecar.ConfigCommand.From(_config));
+        }
+        catch (Exception ex)
+        { notifier.Toast($"Sidecar failed to start: {ex.Message}"); }
+```
+
+In `OnSettingsSaved`, replace:
+
+```csharp
+            await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
+```
+
+with:
+
+```csharp
+            // The sidecar tears down + recreates the ASR engine on EVERY config
+            // command, so only send one when an ASR-relevant field actually
+            // changed (ConfigCommand carries nothing else). A failed initial
+            // launch leaves the baseline "" and the next save re-sends.
+            var sidecarJson = System.Text.Json.JsonSerializer.Serialize(
+                Core.Sidecar.ConfigCommand.From(_config));
+            if (sidecarJson != _lastSidecarConfigJson)
+            {
+                await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
+                _lastSidecarConfigJson = sidecarJson;
+            }
+```
+
+(Crash-restart is unaffected: `SidecarManager.LaunchAsync` re-sends the full config itself on every respawn.)
+
+- [ ] **Step 4: Full gate**
+
+Run (from `host/`): `dotnet build -c Release` then `dotnet test`
+Expected: green.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add host/DeadAir.App/App.xaml.cs host/DeadAir.Core.Tests/SidecarCommandTests.cs
+git commit -m "feat(ui): skip sidecar reconfig on host-only saves"
+```
+
+---
+
 ### Task 7: Docs + final verification
 
 **Files:**
@@ -536,7 +668,9 @@ git commit -m "feat(ui): tray translate toggle"
 - **Output language (translation)** — optionally have your English dictation
   injected in another language (v1 ships English + Spanish in the UI; the
   config value is free-form). Translation happens in the same single local
-  LLM call as cleanup — no extra latency, nothing leaves your machine.
+  LLM call as cleanup — no second LLM round-trip, nothing leaves your machine.
+  (One caveat: short phrases that normally skip the LLM entirely do make the
+  call when translating, so they gain that one call's latency.)
   Faithful/Polished still applies (literal vs natural translation), dictionary
   and technical terms stay in English, and the skip-guard is bypassed so short
   phrases translate too. If Ollama is unavailable the raw English is injected
@@ -568,6 +702,12 @@ In the config JSON example change the cleanup line to:
   "cleanup": { "mode": "Faithful", "skipGuardChars": 50, "outputLanguage": "English" },
 ```
 
+and the prompts line to:
+
+```json
+  "prompts": { "faithful": "<full text in §5>", "polished": "<full text in §5>", "translationTemplate": "<{language}/{style} directive — defaults in AppConfig.PromptsConfig>" },
+```
+
 In the error-handling table, after the `Transcript < skipGuardChars` row add:
 
 ```markdown
@@ -579,7 +719,12 @@ In the error-handling table, after the `Transcript < skipGuardChars` row add:
 Run (from `host/`): `dotnet build -c Release` and `dotnet test -c Release`
 Expected: green. Sidecar untouched (verify `git status` shows no `sidecar/` changes) — pytest not required.
 
-Manual smoke (user or session with mic): run `DeadAir.App.exe`, Settings → Output language = Spanish → dictate "hello how are you today my friend" → Spanish lands at cursor; tray toggle off → English again; stop Ollama, dictate ≥50 chars → English + "translation skipped" toast.
+Manual smoke (user or session with mic): run `DeadAir.App.exe`, then in this order:
+1. Settings → Output language = Spanish → dictate "hello how are you today my friend" → Spanish lands at cursor (Faithful: literal).
+2. Tray → check "Polished mode" → dictate an awkward run-on → natural, fluent Spanish.
+3. Add a dictionary term (e.g. `DeadMind`) in Settings → dictate a sentence using it → term appears untranslated inside the Spanish sentence.
+4. **With Spanish still ON**, stop Ollama → dictate anything → raw English lands + "translation skipped" toast (order matters: toggling translation off first would legitimately produce "cleanup skipped" instead).
+5. Restart Ollama, tray toggle "Translate → Spanish" OFF → dictate → English out, behavior identical to pre-feature.
 
 - [ ] **Step 4: Commit**
 
