@@ -888,3 +888,23 @@ Expected: PASS — 151 total, 0 failed.
 git add host/DeadAir.Core/Config/AppConfig.cs host/DeadAir.Core.Tests/PillConfigTests.cs host/DeadAir.App/SettingsWindow.xaml host/DeadAir.App/SettingsWindow.xaml.cs host/DeadAir.App/App.xaml.cs host/DeadAir.App/RecordingIndicatorWindow.xaml.cs
 git commit -m "feat(host): nebula tuning dials in Settings (fan sensitivity, wiggle, wiggle speed)"
 ```
+
+---
+
+### Task 14: Nebula sheds the lantern ignition (fade-in + no pip + higher silence floor)
+
+**User amendment (post-T13 smoke):** nebula should drop the lantern-style ignition effects — no left→right sweep, no white pip; strands should simply fade in. And the bundle must never collapse to a straight line at silence. Haze stays. Right-anchored retract stays. Lantern skin keeps ALL its effects unchanged.
+
+**Files:**
+- Modify: `host/DeadAir.App/RecordingIndicatorWindow.xaml.cs` only.
+
+**Design:**
+1. **Constants:** `SpreadFloor = 2.5 → 5.5`, `SpreadSpan = 10.5 → 7.5` (max fan width stays 5.5+7.5 = 13.0 — the verified clip bound is unchanged; silence now spreads the outer strand to 5.5·1.45 ≈ 8 px).
+2. **Nebula ignition = opacity fade-in, full-width geometry:** in `RenderFrame`'s nebula branch, compute `double ignFade = head >= 1 ? 1.0 : head * head * (3 - 2 * head);` (smoothstepped 0→1 over the existing 300 ms window) and multiply it into every nebula element's opacity (`HazeLine`, all strands). Geometry calls pass `head: 1.0` (no IgnitionAmp gating) and `visibleTo: 1.0` (full width from the first frame). `visibleFrom` still comes through for the retract.
+3. **No pip on nebula:** in `ShowIndicator`, set `BeamPip.Visibility = Nebula ? Visibility.Collapsed : Visibility.Visible;` and in `OnRenderTick`'s Igniting case call `PlacePip()` only `if (!Nebula)`. (The Live pip-fade block self-skips when collapsed.)
+4. **Skin-aware retract termination:** the lantern's `_visibleTo` cap exists to avoid revealing trace the sweep never wrote; nebula has no sweep, so in the Retracting case use `double vCap = Nebula ? 1.0 : _visibleTo;` and terminate on `rf <= 0 || visibleFrom >= vCap`. Nebula's `RenderFrame` retract call keeps passing `_visibleTo`-independent `visibleTo: 1.0` per (2).
+
+**Verification:** no Core changes — no new unit tests (WPF render logic; user smoke is the gate).
+- Build: `dotnet build "host/DeadAir.App/DeadAir.App.csproj" --no-restore` → 0 errors.
+- Suite: `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" -v minimal --no-restore` → 151 passed, 0 failed.
+- Commit: `git add host/DeadAir.App/RecordingIndicatorWindow.xaml.cs && git commit -m "feat(host): nebula fade-in ignition (no sweep/pip) + higher silence floor"`
