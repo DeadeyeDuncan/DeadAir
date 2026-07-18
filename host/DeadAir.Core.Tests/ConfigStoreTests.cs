@@ -32,4 +32,46 @@ public class ConfigStoreTests
         Assert.Contains("DeadMind", loaded.Dictionary);
         Assert.Equal(CleanupMode.Polished, loaded.Cleanup.Mode);
     }
+
+    [Fact]
+    public void OutputLanguage_DefaultsToEnglish_TranslationOff()
+    {
+        var cfg = new AppConfig();
+        Assert.Equal("English", cfg.Cleanup.OutputLanguage);
+        Assert.False(cfg.Cleanup.TranslationActive);
+    }
+
+    [Theory]
+    [InlineData("English", false)]
+    [InlineData("english", false)]
+    [InlineData("  ENGLISH  ", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData(null, false)]
+    [InlineData("Spanish", true)]
+    [InlineData("spanish", true)]
+    [InlineData(" French ", true)]
+    public void TranslationActive_ReflectsOutputLanguage(string? lang, bool active)
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = lang!;
+        Assert.Equal(active, cfg.Cleanup.TranslationActive);
+    }
+
+    [Fact]
+    public void OutputLanguage_RoundTrips_AndTranslationActiveNotSerialized()
+    {
+        var path = Path.Combine(Path.GetTempPath(),
+            Guid.NewGuid().ToString(), "config.json");
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        ConfigStore.Save(cfg, path);
+        var rawJson = File.ReadAllText(path);
+        Assert.Contains("\"outputLanguage\": \"Spanish\"", rawJson);
+        Assert.DoesNotContain("translationActive", rawJson);
+        Assert.Contains("translationTemplate", rawJson);
+        var loaded = ConfigStore.Load(path);
+        Assert.Equal("Spanish", loaded.Cleanup.OutputLanguage);
+        Assert.True(loaded.Cleanup.TranslationActive);
+    }
 }
