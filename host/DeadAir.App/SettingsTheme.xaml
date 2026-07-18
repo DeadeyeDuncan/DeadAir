@@ -105,7 +105,7 @@
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                           IsHitTestVisible="False"/>
-                        <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
+                        <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}"
                                Placement="Bottom" AllowsTransparency="True"
                                StaysOpen="False">
                             <Border Background="{StaticResource PanelBrush}"
