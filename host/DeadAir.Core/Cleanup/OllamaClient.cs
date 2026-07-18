@@ -50,7 +50,16 @@ public sealed class OllamaClient : ITranscriptCleaner
     public async Task<CleanupResult> CleanAsync(string transcript,
         CleanupMode mode, CancellationToken ct = default)
     {
-        if (transcript.Length < _cfg.Cleanup.SkipGuardChars)
+        // Empty/whitespace transcript: never worth an LLM call, translating or
+        // not (a null "final" payload reaches here as ""). Same reason string
+        // as the skip-guard so the Orchestrator's failure toast stays silent.
+        if (string.IsNullOrWhiteSpace(transcript))
+            return new CleanupResult(transcript, true, "below skip guard");
+        // Skip-guard only applies when the output language is English: a short
+        // utterance still needs the LLM to translate it ("yes thanks" must not
+        // inject as English when Spanish is selected).
+        if (!_cfg.Cleanup.TranslationActive &&
+            transcript.Length < _cfg.Cleanup.SkipGuardChars)
             return new CleanupResult(transcript, true, "below skip guard");
         try
         {
