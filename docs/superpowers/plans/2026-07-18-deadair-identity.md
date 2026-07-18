@@ -438,3 +438,227 @@ git commit -m "feat(host): DeadEye red theme on Settings window and tray menu"
 - [ ] Relaunch (`taskkill /IM DeadAir.App.exe /F` first), then `dotnet run --project "host/DeadAir.App/DeadAir.App.csproj"` (background).
 - [ ] User checks: skull icon on taskbar + tray (+ shortcut/exe in Explorer); tray right-click menu dark with red hover; Settings opens near-black with logo header, bone text, dark dropdowns (open one — the popup must be dark, not white), red-accent Save hover; save still applies live; a recording still works end-to-end.
 - [ ] Log check: no ERROR lines.
+
+---
+
+### Task 18: Theme the stragglers (sliders, scrollbars, tray check glyph, dark title bar)
+
+**User amendment at the T17 smoke:** "get the scroll bars, checkboxes and sliders to follow the theme; maybe darkmode the top of the window." The "checkbox" is the tray menu's checkable "Polished mode" glyph (Settings has no CheckBox — but an implicit dark CheckBox style ships anyway for future use). The title bar darkens via DWM's immersive-dark-mode attribute.
+
+**Files:**
+- Modify: `host/DeadAir.App/SettingsTheme.xaml` (replace the Slider style; add ScrollBar + CheckBox styles)
+- Modify: `host/DeadAir.App/Theme.xaml` (replace `DeadAirMenuItem` with a templated version incl. accent check glyph)
+- Modify: `host/DeadAir.App/SettingsWindow.xaml.cs` (dark title bar P/Invoke — the only code-behind change)
+
+- [ ] **Step 1: SettingsTheme.xaml — replace the Slider style**
+
+Replace:
+
+```xml
+    <Style TargetType="Slider">
+        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+    </Style>
+```
+
+with:
+
+```xml
+    <Style TargetType="Slider">
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid VerticalAlignment="Center">
+                        <Border Height="4" CornerRadius="2"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource StrokeBrush}"
+                                BorderThickness="1"/>
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Height="4" CornerRadius="2" Margin="1,0,0,0"
+                                                    Background="{StaticResource AccentBrush}"/>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Background="Transparent" Height="22"/>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Width="14" Height="14">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Ellipse Fill="{StaticResource AccentStrongBrush}"
+                                                     Stroke="{StaticResource BgBrush}"
+                                                     StrokeThickness="1"/>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+```
+
+- [ ] **Step 2: SettingsTheme.xaml — add ScrollBar + CheckBox styles (before the closing `</ResourceDictionary>`)**
+
+```xml
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width" Value="8"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand"
+                                              Opacity="0" Focusable="False"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand"
+                                              Opacity="0" Focusable="False"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb>
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border x:Name="ThumbBd" CornerRadius="4" Margin="1"
+                                                    Background="{StaticResource MutedBrush}"/>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ThumbBd" Property="Background"
+                                                            Value="{StaticResource AccentBrush}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Orientation" Value="Horizontal">
+                            <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="8"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="14" Height="14" CornerRadius="2"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource StrokeBrush}"
+                                BorderThickness="1" VerticalAlignment="Center">
+                            <Path x:Name="Check" Data="M 2 6 L 5 9 L 11 2"
+                                  Stroke="{StaticResource AccentStrongBrush}"
+                                  StrokeThickness="2" Visibility="Collapsed"/>
+                        </Border>
+                        <ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+```
+
+- [ ] **Step 3: Theme.xaml — replace `DeadAirMenuItem` with the templated version (accent check glyph)**
+
+Replace the existing `DeadAirMenuItem` style with:
+
+```xml
+    <Style x:Key="DeadAirMenuItem" TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bd" Background="Transparent" Padding="8,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="18"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Path x:Name="Check" Grid.Column="0" Data="M 0 3 L 3 6 L 8 0"
+                                  Stroke="{StaticResource AccentStrongBrush}" StrokeThickness="2"
+                                  VerticalAlignment="Center" Visibility="Collapsed"/>
+                            <ContentPresenter Grid.Column="1" ContentSource="Header"
+                                              VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{StaticResource AccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+```
+
+(The tray menu is flat — no submenus — so a role-less template is safe; MenuItem input/toggle behavior lives on the control, not the template.)
+
+- [ ] **Step 4: SettingsWindow.xaml.cs — dark title bar**
+
+Add `using System.Runtime.InteropServices;` to the usings, then add inside the class:
+
+```csharp
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
+        nint hwnd, int attr, ref int value, int size);
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        // Dark-mode the non-client title bar (DWMWA_USE_IMMERSIVE_DARK_MODE = 20).
+        // Best-effort: on failure the bar just stays light.
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        int dark = 1;
+        _ = DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
+    }
+```
+
+- [ ] **Step 5: Build + suite**
+
+`dotnet build "host/DeadAir.App/DeadAir.App.csproj" --no-restore` → 0 errors; `dotnet test "host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj" -v minimal --no-restore` → 151 passed.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add host/DeadAir.App/SettingsTheme.xaml host/DeadAir.App/Theme.xaml host/DeadAir.App/SettingsWindow.xaml.cs
+git commit -m "feat(host): theme sliders, scrollbars, check glyphs; dark title bar"
+```

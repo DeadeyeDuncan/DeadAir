@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using DeadAir.Core.Config;
@@ -6,6 +7,20 @@ namespace DeadAir.App;
 
 public partial class SettingsWindow : Window
 {
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
+        nint hwnd, int attr, ref int value, int size);
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        // Dark-mode the non-client title bar (DWMWA_USE_IMMERSIVE_DARK_MODE = 20).
+        // Best-effort: on failure the bar just stays light.
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        int dark = 1;
+        _ = DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
+    }
+
     private readonly AppConfig _config;
     private readonly Action _onSaved;
 

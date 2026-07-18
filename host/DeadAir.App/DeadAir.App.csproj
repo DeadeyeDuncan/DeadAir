@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\DeadAir.Core\DeadAir.Core.csproj" />
@@ -14,6 +14,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\deadair.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\deadair.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\deadair-logo.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\deadair-tile.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

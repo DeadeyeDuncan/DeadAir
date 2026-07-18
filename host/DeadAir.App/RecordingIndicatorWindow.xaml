@@ -5,7 +5,17 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
         IsHitTestVisible="False" Focusable="False">
-    <Border CornerRadius="18" Background="#E6101418">
+    <!-- Ember plate: translucent warm black at the center easing to the deep
+         blood-red rim (user smoke: flat red read too bright; red lives at the
+         edges only). Alphas keep the pill slightly see-through. -->
+    <Border CornerRadius="18">
+        <Border.Background>
+            <RadialGradientBrush>
+                <GradientStop Color="#C8060404" Offset="0"/>
+                <GradientStop Color="#D30E0505" Offset="0.7"/>
+                <GradientStop Color="#E0200807" Offset="1"/>
+            </RadialGradientBrush>
+        </Border.Background>
         <Grid Margin="12,8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
