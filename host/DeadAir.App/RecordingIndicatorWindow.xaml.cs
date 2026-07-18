@@ -136,8 +136,11 @@ public partial class RecordingIndicatorWindow : Window
         GlowLine.Visibility = lan;
         ScopeLine.Visibility = lan;
         // A live lantern->nebula switch must not leave the lantern's pip
-        // stranded on the nebula skin (it re-appears on the next lantern show).
+        // stranded on the nebula skin; the reverse switch mid-ignition restores
+        // it (the Igniting tick re-places it next frame). Live/Retracting stay
+        // pip-less — the 150ms fade window is state-timed and effectively over.
         if (Nebula) BeamPip.Visibility = Visibility.Collapsed;
+        else if (_state == ScopeState.Igniting) BeamPip.Visibility = Visibility.Visible;
     }
 
     public void ShowIndicator()
