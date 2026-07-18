@@ -20,6 +20,9 @@ public partial class App : Application
     private TaskbarIcon _tray = null!;
     private TextWriter _log = null!;
     private System.Windows.Controls.MenuItem _modeMenuItem = null!;
+    private System.Windows.Controls.MenuItem _translateMenuItem = null!;
+    private string _translateLanguage = "Spanish";
+    private string _lastSidecarConfigJson = "";
     private RecordingIndicatorWindow _indicator = null!;
     private Mutex _singleInstance = null!;
 
@@ -149,7 +152,14 @@ public partial class App : Application
         machine.HoldEnded += () => FireAndForget(_orchestrator.OnHotkeyUpAsync, "hotkey-up");
         _hook = new KeyboardHook(machine);
 
-        try { await _sidecar.LaunchAsync(); }
+        try
+        {
+            await _sidecar.LaunchAsync();
+            // LaunchAsync sent the full config; remember what the sidecar has
+            // so host-only settings saves don't bounce the ASR engine.
+            _lastSidecarConfigJson = System.Text.Json.JsonSerializer.Serialize(
+                Core.Sidecar.ConfigCommand.From(_config));
+        }
         catch (Exception ex)
         { notifier.Toast($"Sidecar failed to start: {ex.Message}"); }
     }
@@ -187,6 +197,24 @@ public partial class App : Application
         mode.Unchecked += (_, _) => _orchestrator.Mode = CleanupMode.Faithful;
         _modeMenuItem = mode;
 
+        // Like the Polished toggle this is transient: it flips the live config
+        // object (OllamaClient reads it per-utterance) but persists only when
+        // Settings is next saved.
+        _translateLanguage = _config.Cleanup.TranslationActive
+            ? _config.Cleanup.OutputLanguage.Trim() : "Spanish";
+        var translate = new System.Windows.Controls.MenuItem
+        {
+            Header = $"Translate → {_translateLanguage}",
+            IsCheckable = true,
+            IsChecked = _config.Cleanup.TranslationActive,
+            Style = itemStyle,
+        };
+        translate.Checked += (_, _) =>
+            _config.Cleanup.OutputLanguage = _translateLanguage;
+        translate.Unchecked += (_, _) =>
+            _config.Cleanup.OutputLanguage = "English";
+        _translateMenuItem = translate;
+
         var settings = new System.Windows.Controls.MenuItem
         { Header = "Settings…", Style = itemStyle };
         settings.Click += (_, _) =>
@@ -212,6 +240,7 @@ public partial class App : Application
         };
 
         menu.Items.Add(mode);
+        menu.Items.Add(translate);
         menu.Items.Add(settings);
         menu.Items.Add(new System.Windows.Controls.Separator
         {
@@ -228,9 +257,25 @@ public partial class App : Application
             ConfigStore.Save(_config);
             _orchestrator.Mode = _config.Cleanup.Mode; // apply live, no restart needed
             _modeMenuItem.IsChecked = _config.Cleanup.Mode == CleanupMode.Polished;
+            if (_config.Cleanup.TranslationActive)
+                _translateLanguage = _config.Cleanup.OutputLanguage.Trim();
+            _translateMenuItem.Header = $"Translate → {_translateLanguage}";
+            // Setter fires Checked/Unchecked; both handlers re-assign the same
+            // value OutputLanguage already holds, so this is idempotent.
+            _translateMenuItem.IsChecked = _config.Cleanup.TranslationActive;
             _indicator.SetSkin(_config.Pill.Skin); // apply skin live, no restart needed
             _indicator.ApplyPillTuning(_config.Pill);
-            await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
+            // The sidecar tears down + recreates the ASR engine on EVERY config
+            // command, so only send one when an ASR-relevant field actually
+            // changed (ConfigCommand carries nothing else). A failed initial
+            // launch leaves the baseline "" and the next save re-sends.
+            var sidecarJson = System.Text.Json.JsonSerializer.Serialize(
+                Core.Sidecar.ConfigCommand.From(_config));
+            if (sidecarJson != _lastSidecarConfigJson)
+            {
+                await _sidecar.SendConfigAsync(_config); // hot-reload sidecar side
+                _lastSidecarConfigJson = sidecarJson;
+            }
         }
         catch (Exception ex)
         {
