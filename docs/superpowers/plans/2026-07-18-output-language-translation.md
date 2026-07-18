@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Branch: `feat/output-language`. Working dir for all dotnet commands: `host/`.
-- `"English"` (any casing, surrounding whitespace ignored) and empty/whitespace `outputLanguage` mean translation OFF — behavior must be byte-identical to today.
+- `"English"` (any casing, surrounding whitespace ignored) and empty/whitespace `outputLanguage` mean translation OFF — behavior must be byte-identical to today, with one spec-amended exception: an empty/whitespace-only *transcript* now short-circuits before the LLM in all modes (see Task 3's empty-guard; previously a ≥skip-guard-length all-whitespace transcript made a pointless LLM call and toasted "empty LLM output").
 - Config keys serialize camelCase automatically (`ConfigStore.Options`); do not add attributes for naming.
 - Words never lost: every failure path still injects *something*.
 - Never modify: `sidecar/**`, existing prompt text (`Prompts.Faithful` / `Prompts.Polished`), existing test assertions (only add).
