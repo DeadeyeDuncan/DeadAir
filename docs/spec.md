@@ -11,6 +11,16 @@ in any app — with speech recognition and LLM cleanup running entirely on-devic
 - **Build note:** implementation to be done with the `claude-fable-5` model
   (user switches session model at the implementation transition).
 
+> **2026-07-18 update — multi-vendor runtime.** The design below targets an
+> all-AMD box, which is what it was built and verified on. Since then it is worth
+> recording that the ASR boundary is vendor-neutral by construction: the GPU
+> engine spawns any `whisper-server.exe` and talks HTTP, so the *same* Vulkan
+> binary also runs on **Nvidia** and **Intel** GPUs (with **CUDA**/**SYCL**
+> builds as optional per-vendor fast-paths), and the CPU engine runs on any
+> x86-64 CPU (AMD or Intel). No code changed to enable this. Setup per vendor
+> lives in the README's "GPU backends" section. The Nvidia/Intel-GPU paths are
+> documented, not hardware-tested here.
+
 ---
 
 ## 1. Goals & non-goals
@@ -325,6 +335,16 @@ Ollama polish, voice-command config, documented AMD setup). Its ASR is
 faster-whisper (the broken-on-Windows ROCm path) — swap in whisper.cpp-Vulkan —
 but its injection code, prompt patterns, and config model port straight over.
 Reference skeleton: [`cjpais/Handy`](https://github.com/cjpais/Handy) (Rust).
+
+**2026-07-18 update — non-AMD hardware.** The §7 spike above is AMD-specific by
+history, but the runtime is not AMD-locked. For **Nvidia** or **Intel** GPUs,
+supply the matching `whisper-server.exe` instead of the AMD one — Vulkan covers
+every vendor (all features), and CUDA (`-DGGML_CUDA=1`, Nvidia) or SYCL
+(`-DGGML_SYCL=1`, Intel oneAPI) are optional faster builds. On multi-GPU
+machines, `GGML_VK_VISIBLE_DEVICES` (Vulkan) / `CUDA_VISIBLE_DEVICES` (CUDA)
+select the device; the sidecar inherits host env. See the README "GPU backends"
+section for links. These non-AMD paths are documented from whisper.cpp's
+backend-independent interface, not hardware-tested here.
 
 ---
 
