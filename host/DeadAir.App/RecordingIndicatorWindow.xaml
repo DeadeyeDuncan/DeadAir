@@ -52,7 +52,7 @@
                  row in pixels must spill off the stale LEFT edge — LeftElide
                  guarantees the newest (rightmost) words stay visible. -->
             <TextBlock x:Name="InterimText" Grid.Row="1" FontSize="12"
-                       FontStyle="Italic" Foreground="#66E1F5FE"
+                       FontStyle="Italic" Foreground="#98180F"
                        TextTrimming="None" TextWrapping="NoWrap"
                        TextAlignment="Right"/>
         </Grid>

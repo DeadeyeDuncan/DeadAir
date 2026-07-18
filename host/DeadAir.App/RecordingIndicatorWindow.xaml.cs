@@ -45,9 +45,9 @@ public partial class RecordingIndicatorWindow : Window
 
     private readonly WaveformRingBuffer _wave = new(ScopeSamples);
     private readonly SolidColorBrush _dim =
-        new(Color.FromArgb(0x66, 0xE1, 0xF5, 0xFE));
+        new(Color.FromArgb(0xFF, 0x98, 0x18, 0x0F));   // settled interim words: dark red
     private readonly SolidColorBrush _hot =
-        new(Color.FromArgb(0xFF, 0x8B, 0xE9, 0xFD));
+        new(Color.FromArgb(0xFF, 0xE8, 0x38, 0x2B));   // freshest word: light red
     private string _lastPartial = "";
 
     private ScopeState _state = ScopeState.Idle;
