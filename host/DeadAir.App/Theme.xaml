@@ -16,6 +16,21 @@
         <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <!-- Full template: the stock Aero2 ContextMenu template draws its own
+             light icon-column gutter UNDER the items — recoloring wasn't enough;
+             the gutter lives in the menu's template, so replace it wholesale. -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{StaticResource PanelBrush}"
+                            BorderBrush="{StaticResource StrokeBrush}"
+                            BorderThickness="1" CornerRadius="6" Padding="3">
+                        <ItemsPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="DeadAirMenuItem" TargetType="MenuItem">
