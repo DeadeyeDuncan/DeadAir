@@ -46,7 +46,7 @@ Skin-specific: stroke composition (which Polylines draw) and per-point math.
 | Element | Value | Source |
 |---|---|---|
 | Strand color (1,2) | `#C11D12` (DeadEye `--accent`, direct token), 0.85 px, α 0.65 | Silvering formula ABANDONED on the pill (user smoke: mixed tones read salmon on thin normal-alpha strokes); strands use the theme accent raw |
-| Hot core (strand 0) | `#FFF9F0`, 1.1 px, α 1.0 | `_hot3` strand: `#fff9f0`, width 1.1 when bright, alpha ×1.9 (clamped) |
+| Hot core (strand 0) | `#E8382B` (DeadEye `--accent-strong`), 1.1 px | White hot-core retired at user smoke (read as a white line mid-bundle); core is now the brightest red, hierarchy by opacity |
 | Haze understroke | `#98180F` (logo deep blood red), 9 px, α 0.05, noise amp ×0.7 | haze pass: 9px, `(0.016+0.034·eLit)` ≈ 0.05, amp ×0.7 |
 | Noise | `WispNoff(u, t·0.33, seed, k)` — 3 layered sines `/1.83` | `wispNoff` verbatim; `t·0.33` = the tamed 3×-slowed drift |
 | Noise envelope | `WispEnv(u) = sin(π·u)^0.75`, **exactly 0** at/outside endpoints | `wispEnv` verbatim incl. the endpoint clamp (their `wispEnv(1)=1.16e-12` bug — pinned as a test here) |
@@ -73,7 +73,7 @@ Skin-specific: stroke composition (which Polylines draw) and per-point math.
 
 - **XAML:** four new Polylines inside `ScopeCanvas`, z-order bottom→top:
   `HazeLine` (9 px, `#98180F`, α .05) → `Strand1`/`Strand2` (0.85 px,
-  `#C11D12`, α .65) → `StrandHot` (1.1 px, `#FFF9F0`, α 1.0). Pip shared.
+  `#C11D12`, α .65) → `StrandHot` (1.1 px, `#E8382B`). Pip shared.
 - **Skin state:** `_skin` field (default `"nebula"`), `public void
   SetSkin(string skin)` — normalizes (anything ≠ `"lantern"` → `"nebula"`),
   toggles element visibility between the lantern set {GlowLine, ScopeLine}

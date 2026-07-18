@@ -24,8 +24,8 @@
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.95"/>
                 <!-- Nebula skin (spec 2026-07-17 redesign): 9px haze under a
-                     6-strand DeadEye connection bundle; StrandHot is the white
-                     core. Only one skin's elements are Visible (SetSkin). -->
+                     6-strand DeadEye connection bundle; StrandHot is the brightest-red
+                     core strand. Only one skin's elements are Visible (SetSkin). -->
                 <Polyline x:Name="HazeLine" Stroke="#98180F" StrokeThickness="9"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.05"
@@ -50,7 +50,7 @@
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.34"
                           Visibility="Collapsed"/>
-                <Polyline x:Name="StrandHot" Stroke="#FFF9F0" StrokeThickness="1.1"
+                <Polyline x:Name="StrandHot" Stroke="#E8382B" StrokeThickness="1.1"
                           StrokeLineJoin="Round" StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round" Opacity="0.62"
                           Visibility="Collapsed"/>
