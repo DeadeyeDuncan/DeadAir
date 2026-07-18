@@ -54,19 +54,23 @@ The support already exists in code; only the docs lag. Two structural reasons:
    - Requirements section: add Nvidia and Intel to the GPU-path line.
    - CPU section: state plainly it runs on **any modern x86-64 CPU — AMD or
      Intel** (currently described neutrally but never names Intel).
-2. **docs/spec.md**
-   - Rename §7 "Setup & dependencies (AMD-specific)" to a vendor-neutral title;
-     add short per-vendor pointers: Vulkan binary (all), plus optional CUDA
-     (Nvidia) and SYCL (Intel) build/download links, alongside the existing
-     AMD/Vulkan link.
-   - Line 3 header ("all-AMD") and the §5 GpuEngine rationale: generalize to
-     "cross-vendor Vulkan; CUDA/SYCL optional per vendor." Keep the RX 6800 XT
-     named as the one *verified* card ("developed / tested on"), not as a
-     requirement.
-   - Add a **multi-GPU note**: on iGPU+dGPU machines the Vulkan build honors
-     `GGML_VK_VISIBLE_DEVICES` and the CUDA build honors `CUDA_VISIBLE_DEVICES`;
-     the sidecar inherits host env, so the user can select a device with no code
-     change.
+2. **docs/spec.md** — *preserve as historical record; annotate, do not rewrite.*
+   `spec.md` is a dated (2026-07-05) design artifact whose stated target was an
+   "all-AMD box." Its original AMD framing (line 3, §1 target hardware, §5
+   rationale) stays **verbatim** — AMD genuinely was the target then; rewriting
+   it would falsify the record. Instead:
+   - Add a short, clearly dated **"2026-07-18 update"** note near the top (after
+     the status/date block) stating that the exe-subprocess boundary makes the
+     GPU backend vendor-neutral — the supplied Vulkan `whisper-server.exe` runs
+     on Nvidia and Intel GPUs too, with CUDA/SYCL as optional per-vendor
+     fast-paths — and pointing to the README for setup.
+   - Add a matching dated note at the end of §7 with the per-vendor pointers
+     (Vulkan for all; optional CUDA / SYCL links) and the **multi-GPU** tip: the
+     Vulkan build honors `GGML_VK_VISIBLE_DEVICES`, CUDA honors
+     `CUDA_VISIBLE_DEVICES`; the sidecar inherits host env, so a device can be
+     selected with no code change.
+   - The §7 heading, line 3, and §5 rationale are **left unchanged.** The README
+     is the living doc that carries the full multi-vendor reframe.
 3. **Code comments / docstrings only** — `gpu_whispercpp.py` lines ~17, ~24,
    ~120: generalize "Vulkan build" → "GPU-backend build"; "AMD driver
    device-lost / TDR" → "driver device-lost / TDR"; "no Vulkan device?" → "no
