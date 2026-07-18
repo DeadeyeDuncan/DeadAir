@@ -24,6 +24,39 @@
                 <ComboBoxItem Content="Polished"/>
             </ComboBox>
 
+            <TextBlock FontWeight="Bold" Text="Scope skin"/>
+            <ComboBox x:Name="SkinBox" Margin="0,4,0,12">
+                <ComboBoxItem Content="nebula"/>
+                <ComboBoxItem Content="lantern"/>
+            </ComboBox>
+
+            <TextBlock FontWeight="Bold" Text="Nebula fan sensitivity"/>
+            <DockPanel Margin="0,4,0,12">
+                <TextBlock x:Name="FanGainValue" DockPanel.Dock="Right" Width="36"
+                           TextAlignment="Right"/>
+                <Slider x:Name="FanGainSlider" Minimum="0.5" Maximum="8"
+                        TickFrequency="0.1" IsSnapToTickEnabled="True"
+                        ValueChanged="OnTuningChanged"/>
+            </DockPanel>
+
+            <TextBlock FontWeight="Bold" Text="Nebula wiggle"/>
+            <DockPanel Margin="0,4,0,12">
+                <TextBlock x:Name="WiggleValue" DockPanel.Dock="Right" Width="36"
+                           TextAlignment="Right"/>
+                <Slider x:Name="WiggleSlider" Minimum="0" Maximum="1.5"
+                        TickFrequency="0.05" IsSnapToTickEnabled="True"
+                        ValueChanged="OnTuningChanged"/>
+            </DockPanel>
+
+            <TextBlock FontWeight="Bold" Text="Nebula wiggle speed"/>
+            <DockPanel Margin="0,4,0,12">
+                <TextBlock x:Name="WiggleSpeedValue" DockPanel.Dock="Right" Width="36"
+                           TextAlignment="Right"/>
+                <Slider x:Name="WiggleSpeedSlider" Minimum="0" Maximum="4"
+                        TickFrequency="0.1" IsSnapToTickEnabled="True"
+                        ValueChanged="OnTuningChanged"/>
+            </DockPanel>
+
             <TextBlock FontWeight="Bold"
                        Text="Custom dictionary (one term per line)"/>
             <TextBox x:Name="DictionaryBox" Margin="0,4,0,12" Height="120"

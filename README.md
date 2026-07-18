@@ -42,13 +42,20 @@ of seconds.
   text is left on the clipboard with a *press Ctrl+V* toast, so your dictation is
   never lost.
 - **Live pill overlay (v0.2)** — while you hold the key, a small window shows a
-  scrolling PCM oscilloscope and a self-correcting interim transcript. The
-  interim text is a preview only and is never injected; the authoritative decode
-  happens on key-up. (Waveform on all engines; live text is GPU-only.)
+  voice scope and a self-correcting interim transcript. Two selectable skins,
+  both ported from DeadEye's node map: **Nebula** (default) — a bundle of
+  smooth silvered-amber strands that fades in on press, fans wide and ripples
+  with traveling waves while you speak, settles narrow when you pause (driven
+  by loudness, not the literal waveform), and retracts on release; **Lantern**
+  — the classic scrolling PCM oscilloscope as a warm phosphor double-stroke
+  that ignites left→right, breathes while you speak, and retracts away. The
+  interim text is a preview only and is never injected; the authoritative
+  decode happens on key-up. (Scope on all engines; live text is GPU-only.)
 - **Custom dictionary** — user terms bias both Whisper (as `initial_prompt`) and
   the LLM ("preserve these exactly").
 - **System tray + settings** — mode toggle, ASR engine/model, Ollama model+URL,
-  mic device, and dictionary editor. Settings apply live (the sidecar is
+  mic device, dictionary editor, scope skin picker, and three nebula dials
+  (fan sensitivity, wiggle, wiggle speed). Settings apply live (the sidecar is
   hot-reconfigured); no restart needed except for a hotkey change.
 - **Resilient by design** — single-instance guard, sidecar crash-restart with
   capped backoff, whisper-server self-heal/respawn, per-utterance timeout, and

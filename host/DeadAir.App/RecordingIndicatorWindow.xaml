@@ -13,8 +13,57 @@
             </Grid.RowDefinitions>
             <Canvas x:Name="ScopeCanvas" Grid.Row="0" Width="296" Height="40"
                     ClipToBounds="True">
-                <Polyline x:Name="ScopeLine" Stroke="#4FC3F7" StrokeThickness="1.4"
-                          StrokeLineJoin="Round"/>
+                <!-- Lantern phosphor double-stroke (spec 2026-07-16): soft wide
+                     glow under a thin bright core; both share the same Points.
+                     WPF has no additive compositing for strokes — layered
+                     translucent strokes approximate the canvas 'lighter' pass. -->
+                <Polyline x:Name="GlowLine" Stroke="#FFB454" StrokeThickness="3.5"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.30"/>
+                <Polyline x:Name="ScopeLine" Stroke="#FFC77F" StrokeThickness="1.3"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.95"/>
+                <!-- Nebula skin (spec 2026-07-17 redesign): 9px haze under a
+                     6-strand DeadEye connection bundle; StrandHot is the white
+                     core. Only one skin's elements are Visible (SetSkin). -->
+                <Polyline x:Name="HazeLine" Stroke="#EEDAC2" StrokeThickness="9"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.05"
+                          Visibility="Collapsed"/>
+                <Polyline x:Name="Strand1" Stroke="#EEDAC2" StrokeThickness="0.85"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.34"
+                          Visibility="Collapsed"/>
+                <Polyline x:Name="Strand2" Stroke="#EEDAC2" StrokeThickness="0.85"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.34"
+                          Visibility="Collapsed"/>
+                <Polyline x:Name="Strand3" Stroke="#EEDAC2" StrokeThickness="0.85"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.34"
+                          Visibility="Collapsed"/>
+                <Polyline x:Name="Strand4" Stroke="#EEDAC2" StrokeThickness="0.85"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.34"
+                          Visibility="Collapsed"/>
+                <Polyline x:Name="Strand5" Stroke="#EEDAC2" StrokeThickness="0.85"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.34"
+                          Visibility="Collapsed"/>
+                <Polyline x:Name="StrandHot" Stroke="#FFF9F0" StrokeThickness="1.1"
+                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" Opacity="0.62"
+                          Visibility="Collapsed"/>
+                <Ellipse x:Name="BeamPip" Width="11" Height="11"
+                         Visibility="Collapsed" IsHitTestVisible="False">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#FFFFF9F0" Offset="0"/>
+                            <GradientStop Color="#CCFFB454" Offset="0.45"/>
+                            <GradientStop Color="#00FFB454" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
             </Canvas>
             <!-- TextAlignment=Right: a wide-glyph line that overflows the 296px
                  row in pixels must spill off the stale LEFT edge — LeftElide

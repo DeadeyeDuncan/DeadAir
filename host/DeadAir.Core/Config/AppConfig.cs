@@ -16,6 +16,7 @@ public sealed class AppConfig
     public List<string> Dictionary { get; set; } = new();
     public string Mic { get; set; } = "default";
     public InjectConfig Inject { get; set; } = new();
+    public PillConfig Pill { get; set; } = new();
     public SidecarLaunchConfig Sidecar { get; set; } = new();
 }
 
@@ -81,6 +82,15 @@ public sealed class InjectConfig
     public string Method { get; set; } = "auto"; // auto | clipboard | sendinput
     public string PasteHotkey { get; set; } = "Ctrl+V";
     public int RestoreClipboardDelayMs { get; set; } = 150;
+}
+
+public sealed class PillConfig
+{
+    public string Skin { get; set; } = "nebula"; // nebula | lantern (host-only, never sent to the sidecar)
+    // Nebula dials (host-only). Window clamps at apply: 0.5-8 / 0-1.5 / 0-4.
+    public double FanGain { get; set; } = 3.0;      // voice sensitivity of the fan
+    public double Wiggle { get; set; } = 0.6;       // turbulence depth at full voice
+    public double WiggleSpeed { get; set; } = 1.0;  // traveling-wave speed multiplier
 }
 
 public sealed class SidecarLaunchConfig
