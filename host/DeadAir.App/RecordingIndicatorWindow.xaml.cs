@@ -135,6 +135,9 @@ public partial class RecordingIndicatorWindow : Window
         foreach (var s in _strands) s.Visibility = neb;
         GlowLine.Visibility = lan;
         ScopeLine.Visibility = lan;
+        // A live lantern->nebula switch must not leave the lantern's pip
+        // stranded on the nebula skin (it re-appears on the next lantern show).
+        if (Nebula) BeamPip.Visibility = Visibility.Collapsed;
     }
 
     public void ShowIndicator()
@@ -264,7 +267,11 @@ public partial class RecordingIndicatorWindow : Window
             double tSlow = _nebPhase;
             double a = SpreadFloor + enorm * SpreadSpan;   // fan width, 5.5..13.0 px
             double glow = 0.55 + 0.45 * enorm;             // strand brightness, floored
-            double ignFade = head >= 1 ? 1.0 : head * head * (3 - 2 * head);
+            // Fade-in from _visibleTo, not the head param: _visibleTo freezes the
+            // ignition progress if a hide interrupts the ramp, so the retract fades
+            // from the brightness it actually reached (head snaps to 1 in Retracting).
+            double ign = _visibleTo;
+            double ignFade = ign >= 1 ? 1.0 : ign * ign * (3 - 2 * ign);
             SetLine(HazeLine, HazeOpacity * (0.5 + 0.5 * enorm) * ignFade * fade,
                 ScopeGeometry.BuildStrandPoints(ScopeWidth, ScopeHeight, HazeSegs,
                     a * 0.7, tSlow, HazeSeed, 1.0, head: 1.0, visibleFrom, visibleTo: 1.0));
