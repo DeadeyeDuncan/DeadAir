@@ -5,7 +5,9 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
         IsHitTestVisible="False" Focusable="False">
-    <Border CornerRadius="18" Background="#E6101418">
+    <!-- Red-cast black: theme bg #060404 pulled ~18% toward the deep blood
+         #98180F, translucency kept (was the pre-rebrand blue-black #101418). -->
+    <Border CornerRadius="18" Background="#E6200807">
         <Grid Margin="12,8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
