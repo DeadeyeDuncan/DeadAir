@@ -167,8 +167,12 @@ ever took focus, the paste would land in the pill's own window instead of the us
 silent text loss into a UI that cannot even display it.
 
 `ShowStatus` must therefore never call `Activate()`, never set `Topmost` in a way that
-steals activation, and must reuse the existing `Show()`-only path. A test pins that
-`ShowStatus` reaches `Show()` and not `Activate()`.
+steals activation, and must reuse the existing `Show()`-only path.
+
+This is enforced by construction and by manual smoke, **not** by a unit test:
+`RecordingIndicatorWindow` is a WPF window and this codebase keeps WPF smoke-only
+(the testable decisions live in `DeadAir.Core`). The smoke step is: dictate into Notepad
+and confirm the text lands there while the pill is visible.
 
 ## Not changing
 
