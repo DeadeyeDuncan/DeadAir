@@ -56,7 +56,48 @@ public enum FlowOutcome { Injected, NothingHeard, Failed, TimedOut, Interrupted 
 public event Action<FlowOutcome>? Outcome;
 ```
 
-### The outcome must be owned by an utterance (adversarial-review blocker)
+### Superseded outcomes are suppressed in the App layer, not in Core
+
+> **Design history — two failed attempts, kept as a warning.** The first draft raised
+> `Outcome` unconditionally with no suppression at all. The second tried to give Core
+> per-utterance *ownership* by comparing a captured `_utteranceId` inside a guarded
+> `RaiseOutcome`. Two rounds of adversarial review killed the second approach with four
+> distinct blockers, because `_utteranceId` was never designed to express UI lifetime:
+> `OnHotkeyDownAsync` does not advance it (so a new recording does not invalidate an old
+> captured id), a `ready` arriving mid-`Cleaning` advances it while preserving state (so
+> the final tail's id goes stale and raises nothing), and any "raised" flag has no correct
+> reset point because an utterance begins on hotkey-*down* while transcription begins on
+> hotkey-*up*. Each patch bolted another condition onto semantics that could not carry it.
+> **Do not reintroduce Core-side ownership.**
+
+The constraint being protected is a *pill* constraint: a terminal caption must never
+overwrite a live recording's scope. So the guard belongs in the layer that owns the pill.
+
+- **Core raises unconditionally.** No ownership, no idempotence flag, no id capture. Each
+  terminal path raises its outcome and nothing more. This removes the entire class of
+  blockers above.
+- **The App suppresses terminal captions while a recording is live.** `App.xaml.cs` already
+  receives every `FlowState` through the notifier hook; it records the latest one. When an
+  outcome arrives and the last state was `Recording`, the caption is dropped.
+- **Ordering is reliable because both paths marshal through the same dispatcher.**
+  `TrayNotifier.SetState` dispatches the state hook, and the outcome handler dispatches too,
+  so they serialize on the UI thread. If the new `Recording` was queued first, the guard
+  sees it and drops the stale caption; if the caption was queued first, it lands before the
+  recording begins and `ShowIndicator` clears it. There is no window where a stale caption
+  survives into a live recording.
+- **The suppression predicate is pure and testable headless**, so it does not hide in a
+  WPF file:
+
+```csharp
+// on PillStatus
+public static bool SuppressTerminal(FlowState lastState) => lastState == FlowState.Recording;
+```
+
+A superseded tail therefore still injects its words and still raises `Injected`; the App
+simply declines to draw it. Words are never lost, and the new recording's pill is never
+touched.
+
+### Historical note: the abandoned ownership approach
 
 A bare "raise on each terminal path" is **wrong**, and the existing test suite already
 pins why. `HandleFinal_TailDoesNotStompNewRecording` documents this legal sequence:
@@ -137,10 +178,17 @@ public static class PillStatus
 **Why `Cleaning` is not captioned from the state hook.** The mode and translate flags are
 mutable from the tray at any moment, and `TrayNotifier.SetState` dispatches the hook
 *asynchronously* — so a hook that re-reads `_orchestrator.Mode` / `config.Cleanup
-.TranslationActive` can caption an operation that was never submitted. `Orchestrator`
-already snapshots both immediately before the cleanup await, precisely to stop the toast
-from lying. The caption must use **that same snapshot**, so it is delivered by a second
-additive event raised at the snapshot site rather than inferred later:
+.TranslationActive` can caption an operation that was never submitted. The caption is
+therefore delivered by a second additive event raised where the values are read:
+
+**Honest limit on "snapshot".** `Mode` can be made exact: capture it into one local and
+pass that same local to both `CleaningStarted` and `CleanAsync`. `translating` cannot be
+made exact without reworking cleanup plumbing — `OllamaClient` re-reads
+`TranslationActive` for its skip guard and `PromptBuilder` reads it again when building the
+prompt, so a toggle flipped mid-flight can still make the caption disagree with the prompt
+actually sent. That is a **pre-existing property of the existing toast**, which snapshots
+at the same place and can drift the same way; this feature does not make it worse and does
+not fix it. Do not claim the caption is guaranteed to match the submitted prompt.
 
 ```csharp
 public event Action<CleanupMode, bool>? CleaningStarted;   // (mode, translating)
