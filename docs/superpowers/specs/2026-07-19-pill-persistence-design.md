@@ -50,14 +50,50 @@ are `Transcribing → Idle`. Labelling an error "nothing heard" would be a lie i
 `OrchestratorTests`, and widening it breaks every implementer for no gain.
 
 ```csharp
-public enum FlowOutcome { Injected, NothingHeard, Failed, TimedOut }
+public enum FlowOutcome { Injected, NothingHeard, Failed, TimedOut, Interrupted }
 
 // on Orchestrator, additive:
 public event Action<FlowOutcome>? Outcome;
 ```
 
-Raised at the four existing terminal points: after injection completes, on the `empty`
-event, on the `error` event, and in the utterance-timeout callback.
+### The outcome must be owned by an utterance (adversarial-review blocker)
+
+A bare "raise on each terminal path" is **wrong**, and the existing test suite already
+pins why. `HandleFinal_TailDoesNotStompNewRecording` documents this legal sequence:
+
+1. A `final` enters `Cleaning`.
+2. An unsolicited `error` resets state to `Idle`.
+3. The user starts a **new** recording.
+4. The old utterance's cleanup tail still injects its words — deliberately, because words
+   are never lost — without demoting the new `Recording`.
+
+Raising unconditionally would emit `Failed` at step 2 and `Injected` at step 4. That second
+caption lands **while a new recording is live**, overwriting its scope and arming a 900 ms
+dismissal that retracts the new pill. That breaks exactly-once *and* functionally violates
+the byte-identical-Recording constraint. There are zero-fire paths too: the `ready` event
+resets `Transcribing → Idle`, and a throwing cleaner or injector reaches `finally` without
+passing an inject-site raise — in both cases the pill would hang on a stale caption.
+
+Therefore every terminal path funnels through one guarded helper:
+
+```csharp
+private void RaiseOutcome(FlowOutcome outcome, long utteranceId)
+{
+    lock (_gate)
+    {
+        if (_utteranceId != utteranceId || _outcomeRaised) return;
+        _outcomeRaised = true;
+    }
+    Outcome?.Invoke(outcome);   // always outside the lock
+}
+```
+
+- **Ownership:** an utterance that no longer owns the flow (`_utteranceId` moved on) raises
+  nothing. A superseded tail therefore injects its words **silently** — the new recording's
+  pill is never touched. This is the deliberate choice, not an oversight.
+- **Idempotence:** at most one outcome per utterance.
+- **Zero-fire coverage:** the final path raises in `finally`, so a throwing cleaner or
+  injector still lands an outcome. The `ready` reset raises `Interrupted`.
 
 ## Changes
 
@@ -87,18 +123,31 @@ public static class PillStatus
 |---|---|---|
 | `Recording` | *(none — scope visual)* | — |
 | `Transcribing` | `"transcribing…"` | no |
-| `Cleaning`, `translating: true` | `"translating…"` | no |
-| `Cleaning`, `Polished` | `"polishing…"` | no |
-| `Cleaning`, `Faithful` | `"cleaning…"` | no |
 | `Injecting` | `"injecting…"` | no |
+| `Cleaning` | *(none from state — see below)* | — |
+| `CleaningStarted`, `translating: true` | `"translating…"` | no |
+| `CleaningStarted`, `Polished` | `"polishing…"` | no |
+| `CleaningStarted`, `Faithful` | `"cleaning…"` | no |
 | `Outcome.Injected` | `"sent"` | yes |
 | `Outcome.NothingHeard` | `"nothing heard"` | yes |
 | `Outcome.Failed` | `"failed"` | yes |
 | `Outcome.TimedOut` | `"timed out"` | yes |
+| `Outcome.Interrupted` | `"interrupted"` | yes |
 
-The `translating` flag is read from `config.Cleanup.TranslationActive`. `Orchestrator`
-already snapshots that value before the cleanup await so a mid-flight tray toggle cannot
-mislabel the operation; the caption uses the same snapshot for the same reason.
+**Why `Cleaning` is not captioned from the state hook.** The mode and translate flags are
+mutable from the tray at any moment, and `TrayNotifier.SetState` dispatches the hook
+*asynchronously* — so a hook that re-reads `_orchestrator.Mode` / `config.Cleanup
+.TranslationActive` can caption an operation that was never submitted. `Orchestrator`
+already snapshots both immediately before the cleanup await, precisely to stop the toast
+from lying. The caption must use **that same snapshot**, so it is delivered by a second
+additive event raised at the snapshot site rather than inferred later:
+
+```csharp
+public event Action<CleanupMode, bool>? CleaningStarted;   // (mode, translating)
+```
+
+`PillStatus.ForState` therefore returns `null` for `Cleaning`, and the app captions the
+cleanup phase from `CleaningStarted`.
 
 ### 3. `DeadAir.App` — `RecordingIndicatorWindow.ShowStatus`
 
@@ -188,10 +237,15 @@ and confirm the text lands there while the pill is visible.
 
 - An exception inside the state hook is already swallowed by `TrayNotifier` so indicator
   failures never break the pipeline. The `Outcome` handler gets the same treatment.
-- If a terminal outcome never arrives (a path that neither injects nor errors), the pill
-  would otherwise hang visible. `ShowStatus(dismiss: false)` starts no timer, so a
-  watchdog is required: any caption left up longer than the utterance timeout
-  (`UtteranceTimeoutMs`, 60 s) retracts itself.
+- If a terminal outcome never arrives, the pill would hang visible, so a persistent
+  caption arms a watchdog. The watchdog must **not** be 60 s: `UtteranceTimeoutMs` is
+  also 60 s, and a tie lets the watchdog start the retract first — after which the
+  `TimedOut` caption arrives, sees `IsVisible == true`, declines to re-show, and gets
+  hidden by the in-flight retract well before its 900 ms. Use **90 s**, comfortably
+  outside the ASR timeout.
+- Relatedly, `ShowStatus` must re-show when the window is **retracting**, not only when it
+  is hidden. `IsVisible` stays true throughout the 450 ms retract, so an `IsVisible`-only
+  check silently drops any caption that lands mid-retract.
 - `ShowStatus` called before `ShowIndicator` self-heals by showing first.
 
 ## Testing
