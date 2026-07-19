@@ -21,6 +21,12 @@
 - Build with `--no-restore` (the Codex sandbox cannot read `NuGet.Config`).
 - Never pass a `.cs` file to `dotnet test` — that yields `MSB1008`. Pass the `.csproj`.
 - Baseline suite before any change: 152 passing. It must not drop.
+- **The implementing worker must NOT run any `git` command.** The Codex sandbox writes Deny
+  ACEs on `.git` by design and re-applies them every session; `git commit` will fail. Write
+  files, run tests, then stop and report. The controller commits. The `git` commands shown in
+  the commit steps are for the controller, not the worker.
+- Use forward slashes in every path. Backslashes are eaten in transit to the worker
+  (`.\host\…` arrives as `hostâ€¦`).
 
 ---
 
@@ -202,7 +208,9 @@ dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore
 
 Expected: PASS, total count 157 (152 baseline + 5 new), 0 failed.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Stop and report — the controller commits**
+
+Report the test counts verbatim. Controller runs:
 
 ```bash
 git add host/DeadAir.Core/FlowOutcome.cs host/DeadAir.Core/Orchestrator.cs host/DeadAir.Core.Tests/OrchestratorTests.cs
@@ -352,7 +360,7 @@ dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore
 
 Expected: PASS, total 166 (157 + 9), 0 failed.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Stop and report — the controller commits**
 
 ```bash
 git add host/DeadAir.Core/PillStatus.cs host/DeadAir.Core.Tests/PillStatusTests.cs
@@ -436,7 +444,7 @@ dotnet build host/DeadAir.slnx --no-restore
 
 Expected: 0 errors.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Stop and report — the controller commits**
 
 ```bash
 git add host/DeadAir.App/RecordingIndicatorWindow.xaml.cs
@@ -510,7 +518,7 @@ dotnet build host/DeadAir.slnx --no-restore
 
 Expected: 0 errors. If `PillStatus` is unresolved, add `using DeadAir.Core;`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Stop and report — the controller commits**
 
 ```bash
 git add host/DeadAir.App/App.xaml.cs
