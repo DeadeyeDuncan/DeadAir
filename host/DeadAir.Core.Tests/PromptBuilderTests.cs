@@ -67,4 +67,20 @@ public class PromptBuilderTests
             "dictionary suffix must come after the translation directive");
         Assert.EndsWith("DeadMind.", p);
     }
+
+    [Theory]
+    [InlineData("Mandarin Chinese")]
+    [InlineData("Arabic")]
+    public void NewLanguageOutput_AppendsFilledDirective(string language)
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = language;
+
+        var prompt = PromptBuilder.Build(CleanupMode.Faithful, cfg);
+
+        Assert.Contains($"render the transcript in {language}", prompt);
+        Assert.Contains($"ONLY the {language} text", prompt);
+        Assert.DoesNotContain("{language}", prompt);
+        Assert.DoesNotContain("{style}", prompt);
+    }
 }
