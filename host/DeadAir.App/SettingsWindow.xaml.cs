@@ -24,15 +24,17 @@ public partial class SettingsWindow : Window
 
     private readonly AppConfig _config;
     private readonly Action _onSaved;
+    private readonly OllamaClient _ollama;
 
     private static readonly string[] HotkeyChoices =
     { "RControl", "RAlt", "CapsLock", "F13", "Scroll", "Pause" };
 
-    public SettingsWindow(AppConfig config, Action onSaved)
+    public SettingsWindow(AppConfig config, Action onSaved, OllamaClient ollama)
     {
         InitializeComponent();
         _config = config;
         _onSaved = onSaved;
+        _ollama = ollama;
         foreach (var k in HotkeyChoices)
             HotkeyBox.Items.Add(new ComboBoxItem { Content = k });
         Select(HotkeyBox, _config.Hotkey.Key);
@@ -65,7 +67,7 @@ public partial class SettingsWindow : Window
     {
         try
         {
-            var models = await new OllamaClient(_config).ListModelsAsync();
+            var models = await _ollama.ListModelsAsync();
             if (models.Count == 0)
                 return;
 

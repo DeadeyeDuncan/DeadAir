@@ -15,6 +15,7 @@ public partial class App : Application
 {
     private AppConfig _config = null!;
     private SidecarManager _sidecar = null!;
+    private OllamaClient _cleaner = null!;
     private Orchestrator _orchestrator = null!;
     private KeyboardHook _hook = null!;
     private TaskbarIcon _tray = null!;
@@ -93,14 +94,14 @@ public partial class App : Application
         }, clipboard);
 
         _sidecar = new SidecarManager(_config);
-        var cleaner = new OllamaClient(_config);
+        _cleaner = new OllamaClient(_config);
         _ = Task.Run(async () =>
         {
-            var ok = await cleaner.WarmUpAsync();
+            var ok = await _cleaner.WarmUpAsync();
             _log.WriteLine($"{DateTime.Now:HH:mm:ss} ollama warm-up " +
                 (ok ? "ok" : "failed (will load on first use)"));
         });
-        _orchestrator = new Orchestrator(_sidecar, cleaner, injector,
+        _orchestrator = new Orchestrator(_sidecar, _cleaner, injector,
             notifier, _config);
         _orchestrator.LatencyLogged += line =>
             _log.WriteLine($"{DateTime.Now:HH:mm:ss} {line}");
@@ -231,7 +232,7 @@ public partial class App : Application
         var settings = new System.Windows.Controls.MenuItem
         { Header = "Settings…", Style = itemStyle };
         settings.Click += (_, _) =>
-            new SettingsWindow(_config, OnSettingsSaved).Show();
+            new SettingsWindow(_config, OnSettingsSaved, _cleaner).Show();
 
         var exit = new System.Windows.Controls.MenuItem { Header = "Exit", Style = itemStyle };
         exit.Click += async (_, _) =>
