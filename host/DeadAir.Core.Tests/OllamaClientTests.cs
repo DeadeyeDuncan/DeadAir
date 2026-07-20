@@ -230,6 +230,60 @@ public class OllamaClientTests
     }
 
     [Fact]
+    public async Task ListModels_ReturnsNamesInOrdinalAscendingOrder()
+    {
+        var payload = """{"models":[{"name":"qwen3:8b"},{"name":"llama3.2:latest"},{"name":"gemma3:4b"}]}""";
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent(payload, Encoding.UTF8) });
+        var client = new OllamaClient(Cfg(), handler);
+
+        var models = await client.ListModelsAsync();
+
+        Assert.Equal(new[] { "gemma3:4b", "llama3.2:latest", "qwen3:8b" }, models);
+    }
+
+    [Fact]
+    public async Task ListModels_GetsApiTagsPath()
+    {
+        var handler = new CapturingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent("{\"models\":[]}", Encoding.UTF8) });
+        var client = new OllamaClient(Cfg(), handler);
+
+        await client.ListModelsAsync();
+
+        Assert.Equal("/api/tags", handler.LastRequest!.RequestUri!.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task ListModels_HttpFailure_ReturnsEmpty()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var client = new OllamaClient(Cfg(), handler);
+
+        Assert.Empty(await client.ListModelsAsync());
+    }
+
+    [Fact]
+    public async Task ListModels_MalformedJson_ReturnsEmpty()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent("{ not json", Encoding.UTF8) });
+        var client = new OllamaClient(Cfg(), handler);
+
+        Assert.Empty(await client.ListModelsAsync());
+    }
+
+    [Fact]
+    public async Task ListModels_MissingModelsProperty_ReturnsEmpty()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent("{}", Encoding.UTF8) });
+        var client = new OllamaClient(Cfg(), handler);
+
+        Assert.Empty(await client.ListModelsAsync());
+    }
+
+    [Fact]
     public async Task LocalhostUrl_IsRewrittenTo127001()
     {
         // On Windows "localhost" resolves to ::1 first, but Ollama binds 127.0.0.1

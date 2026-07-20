@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using DeadAir.Core.Cleanup;
 using DeadAir.Core.Config;
 
 namespace DeadAir.App;
@@ -57,6 +58,29 @@ public partial class SettingsWindow : Window
         UpdateTuningLabels();
         DictionaryBox.Text = string.Join(Environment.NewLine,
             _config.Dictionary);
+        _ = PopulateOllamaModelsAsync();
+    }
+
+    private async Task PopulateOllamaModelsAsync()
+    {
+        try
+        {
+            var models = await new OllamaClient(_config).ListModelsAsync();
+            if (models.Count == 0)
+                return;
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var currentText = OllamaModelBox.Text;
+                foreach (var model in models)
+                    OllamaModelBox.Items.Add(model);
+                OllamaModelBox.Text = currentText;
+            });
+        }
+        catch
+        {
+            // Model discovery is opportunistic; Settings remains free-form.
+        }
     }
 
     private static void Select(ComboBox box, string value)

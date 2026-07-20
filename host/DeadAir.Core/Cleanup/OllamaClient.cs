@@ -155,4 +155,34 @@ public sealed class OllamaClient : ITranscriptCleaner
             return false;
         }
     }
+
+    /// <summary>Model names from Ollama's /api/tags, sorted. Opportunistic:
+    /// returns an empty list on any failure, never throws.</summary>
+    public async Task<IReadOnlyList<string>> ListModelsAsync(
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync(BaseUrl() + "/api/tags", ct);
+            if (!resp.IsSuccessStatusCode)
+                return Array.Empty<string>();
+
+            using var doc = JsonDocument.Parse(
+                await resp.Content.ReadAsStreamAsync(ct));
+            if (!doc.RootElement.TryGetProperty("models", out var models) ||
+                models.ValueKind != JsonValueKind.Array)
+                return Array.Empty<string>();
+
+            var names = new List<string>();
+            foreach (var model in models.EnumerateArray())
+                names.Add(model.GetProperty("name").GetString() ??
+                    throw new JsonException("Model name is null."));
+            names.Sort(StringComparer.Ordinal);
+            return names;
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
 }

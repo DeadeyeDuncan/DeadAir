@@ -29,7 +29,8 @@
             </ComboBox>
 
             <TextBlock FontWeight="Bold" Text="Ollama model"/>
-            <TextBox x:Name="OllamaModelBox" Margin="0,4,0,12"/>
+            <ComboBox x:Name="OllamaModelBox" Margin="0,4,0,12"
+                      Style="{StaticResource DeadAirEditableComboBox}"/>
 
             <TextBlock FontWeight="Bold" Text="Default cleanup mode"/>
             <ComboBox x:Name="ModeBox" Margin="0,4,0,12">
