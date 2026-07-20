@@ -38,6 +38,10 @@ public partial class SettingsWindow : Window
         Select(EngineBox, _config.Asr.Engine);
         OllamaModelBox.Text = _config.Ollama.Model;
         Select(ModeBox, _config.Cleanup.Mode.ToString());
+        foreach (var language in LanguageCatalog.Languages)
+            OutputLanguageBox.Items.Add(
+                new ComboBoxItem { Content = language });
+
         var outputLang = string.IsNullOrWhiteSpace(_config.Cleanup.OutputLanguage)
             ? "English" : _config.Cleanup.OutputLanguage.Trim();
         // Hand-edited languages (config is free-form) must survive the
