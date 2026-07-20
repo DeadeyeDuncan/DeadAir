@@ -358,4 +358,199 @@ public class OrchestratorTests
         Assert.DoesNotContain(n.Toasts, t => t.Contains("timed out"));
         Assert.Equal(FlowState.Transcribing, o.State); // second utterance untouched
     }
+
+    private static List<FlowOutcome> Watch(Orchestrator o)
+    {
+        var seen = new List<FlowOutcome>();
+        o.Outcome += x => seen.Add(x);
+        return seen;
+    }
+
+    [Fact]
+    public async Task EmptyEvent_RaisesNothingHeard()
+    {
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "empty" });
+        Assert.Equal(new[] { FlowOutcome.NothingHeard }, seen);
+    }
+
+    [Fact]
+    public async Task ErrorEvent_RaisesFailed()
+    {
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent
+        {
+            Event = "error", Where = "asr", Message = "boom",
+        });
+        Assert.Equal(new[] { FlowOutcome.Failed }, seen);
+    }
+
+    [Fact]
+    public async Task SuccessfulInject_RaisesInjected()
+    {
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("hello", false, null)),
+            new FakeInjector(true), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "hello" });
+        Assert.Equal(new[] { FlowOutcome.Injected }, seen);
+    }
+
+    [Fact]
+    public async Task FailedInject_RaisesFailed()
+    {
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("hello", false, null)),
+            new FakeInjector(false), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "hello" });
+        Assert.Equal(new[] { FlowOutcome.Failed }, seen);
+    }
+
+    [Fact]
+    public async Task ThrowingInjector_StillRaisesFailedFromFinally()
+    {
+        // The existing suite pins that this exception PROPAGATES
+        // (HandleFinal_InjectorThrows_StillReturnsToIdle uses ThrowsAsync).
+        // The outcome must still be raised from the finally before it escapes.
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("hello", false, null)),
+            new ThrowingInjector(), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "hello" }));
+        Assert.Equal(new[] { FlowOutcome.Failed }, seen);
+    }
+
+    [Fact]
+    public async Task UtteranceTimeout_RaisesTimedOut()
+    {
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), new FakeNotifier());
+        o.UtteranceTimeoutMs = 30;
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await Task.Delay(300);
+        Assert.Equal(new[] { FlowOutcome.TimedOut }, seen);
+    }
+
+    [Fact]
+    public async Task ReadyDuringTranscribing_RaisesInterrupted()
+    {
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "ready", Engine = "gpu" });
+        Assert.Equal(new[] { FlowOutcome.Interrupted }, seen);
+    }
+
+    [Fact]
+    public async Task ReadyWhileIdle_RaisesNothing()
+    {
+        var o = Make(new FakeSidecar(), new FakeCleaner(new CleanupResult("x", false, null)),
+            new FakeInjector(true), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "ready", Engine = "gpu" });
+        Assert.Empty(seen);
+    }
+
+    [Fact]
+    public async Task ReadyMidCleaning_StillLetsTheFinalTailRaiseInjected()
+    {
+        // ready mid-Cleaning must not force Idle (pinned by
+        // ReadyEvent_MidCleaning_DoesNotForceIdle) and must not swallow the
+        // tail's outcome: the words still land, so "sent" must still be raised.
+        var cl = new BlockingCleaner();
+        var o = Make(new FakeSidecar(), cl, new FakeInjector(true), new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        var finalTask = o.OnSidecarEventAsync(
+            new SidecarEvent { Event = "final", Text = "hello" });
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "ready", Engine = "gpu" });
+        cl.Gate.SetResult(new CleanupResult("hello", false, null));
+        await finalTask;
+        Assert.Equal(new[] { FlowOutcome.Injected }, seen);
+    }
+
+    [Fact]
+    public async Task SupersededTail_LastWins_FailedThenInjected()
+    {
+        // Spec: terminal captions are LAST-WINS, not exactly-once. This is the
+        // pinned superseded-tail sequence WITHOUT a new recording: an
+        // unsolicited error resets mid-Cleaning (raises Failed), then the old
+        // tail still injects its words (raises Injected). Both raises are
+        // correct; the App draws both briefly and the later, truthful "sent"
+        // wins. Do NOT "fix" this to raise once — two ownership schemes died
+        // trying (see the spec's design-history note).
+        var cl = new BlockingCleaner();
+        var inj = new FakeInjector(true);
+        var o = Make(new FakeSidecar(), cl, inj, new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        var finalTask = o.OnSidecarEventAsync(
+            new SidecarEvent { Event = "final", Text = "old words" });
+        await o.OnSidecarEventAsync(new SidecarEvent
+        {
+            Event = "error", Where = "asr", Message = "unsolicited",
+        });
+        cl.Gate.SetResult(new CleanupResult("old words", false, null));
+        await finalTask;
+        Assert.Equal("old words", inj.Injected);                          // words are never lost
+        Assert.Equal(new[] { FlowOutcome.Failed, FlowOutcome.Injected }, seen);  // last-wins pair
+    }
+
+    [Fact]
+    public async Task CleaningStarted_ReportsModeAndTranslating()
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.Mode = CleanupMode.Polished;
+        var o = new Orchestrator(new FakeSidecar(),
+            new FakeCleaner(new CleanupResult("hello", false, null)),
+            new FakeInjector(true), new FakeNotifier(), cfg);
+        var seen = new List<(CleanupMode, bool)>();
+        o.CleaningStarted += (m, t) => seen.Add((m, t));
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "hello" });
+        var (mode, translating) = Assert.Single(seen);
+        Assert.Equal(CleanupMode.Polished, mode);
+        Assert.Equal(cfg.Cleanup.TranslationActive, translating);
+    }
+
+    [Fact]
+    public async Task CleaningStarted_ReportsTranslatingTrue_WhenOutputLanguageActive()
+    {
+        // Review finding: the sibling test's default config makes
+        // TranslationActive false, so a hard-coded `false` in the raise would
+        // pass the whole suite. This pins the true half — the feature's
+        // headline "translating…" caption depends on it.
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        var o = new Orchestrator(new FakeSidecar(),
+            new FakeCleaner(new CleanupResult("hola", false, null)),
+            new FakeInjector(true), new FakeNotifier(), cfg);
+        var seen = new List<(CleanupMode, bool)>();
+        o.CleaningStarted += (m, t) => seen.Add((m, t));
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "hola" });
+        var (_, translating) = Assert.Single(seen);
+        Assert.True(translating);
+    }
 }

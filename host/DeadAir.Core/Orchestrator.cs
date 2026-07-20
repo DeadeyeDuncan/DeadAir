@@ -31,6 +31,8 @@ public sealed class Orchestrator(
     public CleanupMode Mode { get; set; } = config.Cleanup.Mode;
 
     public event Action<string>? LatencyLogged;
+    public event Action<FlowOutcome>? Outcome;
+    public event Action<CleanupMode, bool>? CleaningStarted;
 
     private void SetState(FlowState s) { State = s; notifier.SetState(s); }
 
@@ -69,6 +71,7 @@ public sealed class Orchestrator(
                 SetState(FlowState.Idle);
             }
             notifier.Toast("ASR timed out");
+            Outcome?.Invoke(FlowOutcome.TimedOut);
         });
     }
 
@@ -77,8 +80,10 @@ public sealed class Orchestrator(
         switch (e.Event)
         {
             case "ready":
+                bool abandoned;
                 lock (_gate)
                 {
+                    abandoned = State is FlowState.Recording or FlowState.Transcribing;
                     _utteranceId++;
                     // Don't force Idle while HandleFinalAsync owns the state
                     // (Cleaning/Injecting): its finally lands at Idle anyway,
@@ -87,6 +92,7 @@ public sealed class Orchestrator(
                     if (State is not FlowState.Cleaning and not FlowState.Injecting)
                         SetState(FlowState.Idle);
                 }
+                if (abandoned) Outcome?.Invoke(FlowOutcome.Interrupted);
                 break;
             case "final":
                 bool proceed;
@@ -99,6 +105,7 @@ public sealed class Orchestrator(
                 break;
             case "empty":
                 lock (_gate) { _utteranceId++; SetState(FlowState.Idle); }
+                Outcome?.Invoke(FlowOutcome.NothingHeard);
                 break;
             case "degraded":
                 if (!_degradedToastShown)
@@ -110,12 +117,14 @@ public sealed class Orchestrator(
             case "error":
                 lock (_gate) { _utteranceId++; SetState(FlowState.Idle); }
                 notifier.Toast($"Error ({e.Where}): {e.Message}");
+                Outcome?.Invoke(FlowOutcome.Failed);
                 break;
         }
     }
 
     private async Task HandleFinalAsync(SidecarEvent e)
     {
+        var outcome = FlowOutcome.Failed;
         try
         {
             var asrMs = _clock.ElapsedMilliseconds;
@@ -123,7 +132,9 @@ public sealed class Orchestrator(
             // while cleanup is in flight, and the toast must describe the
             // operation that was actually attempted.
             var translating = config.Cleanup.TranslationActive;
-            var result = await cleaner.CleanAsync(e.Text ?? "", Mode);
+            var mode = Mode;
+            CleaningStarted?.Invoke(mode, translating);
+            var result = await cleaner.CleanAsync(e.Text ?? "", mode);
             var cleanMs = _clock.ElapsedMilliseconds - asrMs;
             if (result.Skipped && result.Reason != "below skip guard")
                 notifier.Toast(translating
@@ -141,6 +152,7 @@ public sealed class Orchestrator(
             var ok = await injector.InjectAsync(result.Text);
             if (!ok)
                 notifier.Toast("Couldn't insert — text on clipboard, press Ctrl+V");
+            outcome = ok ? FlowOutcome.Injected : FlowOutcome.Failed;
             LatencyLogged?.Invoke(
                 $"asr={e.Ms ?? asrMs}ms clean={cleanMs}ms " +
                 $"total={_clock.ElapsedMilliseconds}ms chars={result.Text.Length}");
@@ -154,6 +166,7 @@ public sealed class Orchestrator(
                 if (State is FlowState.Cleaning or FlowState.Injecting)
                     SetState(FlowState.Idle);
             }
+            Outcome?.Invoke(outcome);
         }
     }
 }

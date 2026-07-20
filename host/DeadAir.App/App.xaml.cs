@@ -24,6 +24,7 @@ public partial class App : Application
     private string _translateLanguage = "Spanish";
     private RecordingIndicatorWindow _indicator = null!;
     private Mutex _singleInstance = null!;
+    private FlowState _lastFlowState = FlowState.Idle;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -74,8 +75,13 @@ public partial class App : Application
         _indicator.ApplyPillTuning(_config.Pill);
         var notifier = new TrayNotifier(_tray, Dispatcher, state =>
         {
-            if (state == FlowState.Recording) _indicator.ShowIndicator();
-            else _indicator.HideIndicator();
+            _lastFlowState = state;   // set on the dispatcher thread; read by the handlers below
+            if (state == FlowState.Recording) { _indicator.ShowIndicator(); return; }
+            var caption = PillStatus.ForState(state);
+            if (caption is { } c) _indicator.ShowStatus(c.Text, c.Dismiss);
+            // Idle and Cleaning map to null and are deliberately ignored: the
+            // terminal outcome caption owns dismissal (hiding here would stomp
+            // "sent" instantly), and Cleaning is captioned from CleaningStarted.
         });
 
         var clipboard = new WpfClipboard(Dispatcher);
@@ -98,6 +104,30 @@ public partial class App : Application
             notifier, _config);
         _orchestrator.LatencyLogged += line =>
             _log.WriteLine($"{DateTime.Now:HH:mm:ss} {line}");
+        _orchestrator.CleaningStarted += (mode, translating) => Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                if (PillStatus.SuppressTerminal(_lastFlowState)) return;
+                var c = PillStatus.ForCleaning(mode, translating);
+                _indicator.ShowStatus(c.Text, c.Dismiss);
+            }
+            catch { /* indicator failures never break the pipeline */ }
+        });
+
+        _orchestrator.Outcome += o => Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                // A superseded utterance's tail still reports its outcome. If a
+                // NEW recording is already live, drawing it would overwrite that
+                // recording's scope and retract its pill -- so drop it.
+                if (PillStatus.SuppressTerminal(_lastFlowState)) return;
+                var c = PillStatus.ForOutcome(o);
+                _indicator.ShowStatus(c.Text, c.Dismiss);
+            }
+            catch { /* indicator failures never break the pipeline */ }
+        });
         _sidecar.EventReceived += ev =>
         {
             if (ev.Event == "waveform")
