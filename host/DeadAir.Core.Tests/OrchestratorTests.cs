@@ -125,6 +125,27 @@ public class OrchestratorTests
     }
 
     [Fact]
+    public async Task CleanupFailure_ToastNamesTheModel()
+    {
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        cfg.Ollama.Model = "test-model:99b";
+        var cl = new FakeCleaner(new CleanupResult("raw words here that are long",
+            true, "connection refused"));
+        var inj = new FakeInjector(ok: true);
+        var n = new FakeNotifier();
+        var o = new Orchestrator(new FakeSidecar(), cl, inj, n, cfg);
+
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent
+        { Event = "final", Text = "raw words here that are long" });
+
+        Assert.Contains(n.Toasts, t =>
+            t.Contains("translation skipped") && t.Contains("test-model:99b"));
+    }
+
+    [Fact]
     public async Task InjectFailure_ToastsClipboardHint()
     {
         var cl = new FakeCleaner(new CleanupResult("text", true, "below skip guard"));
