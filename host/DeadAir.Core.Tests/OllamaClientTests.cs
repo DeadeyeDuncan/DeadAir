@@ -137,6 +137,19 @@ public class OllamaClientTests
     }
 
     [Fact]
+    public async Task ConnectCancellation_KeepsOriginalReason()
+    {
+        var handler = new StubHandler(_ => throw new TaskCanceledException("boom"));
+        var client = new OllamaClient(Cfg(), handler);
+        var longText = new string('x', 60);
+
+        var r = await client.CleanAsync(longText, CleanupMode.Faithful);
+
+        Assert.Contains("boom", r.Reason);
+        Assert.DoesNotContain("timed out after", r.Reason);
+    }
+
+    [Fact]
     public async Task CallerCancellation_Propagates()
     {
         var handler = new StubHandler(_ => throw new OperationCanceledException());
@@ -170,6 +183,23 @@ public class OllamaClientTests
         Assert.Equal(longText, r.Text);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10),
             $"expected the stalled body read to be bounded by the ~1s timeout, took {sw.Elapsed}");
+    }
+
+    [Fact]
+    public async Task HangingBodyStream_ReportsExplicitOllamaTimeout()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new HangingStreamContent() });
+        var cfg = Cfg();
+        cfg.Ollama.TimeoutSeconds = 1;
+        var client = new OllamaClient(cfg, handler);
+        var longText = new string('x', 60);
+
+        var r = await client.CleanAsync(longText, CleanupMode.Faithful);
+
+        Assert.True(r.Skipped);
+        Assert.Equal(longText, r.Text);
+        Assert.Equal("timed out after 1s", r.Reason);
     }
 
     [Fact]

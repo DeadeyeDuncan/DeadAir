@@ -61,6 +61,16 @@ public sealed class OllamaClient : ITranscriptCleaner
         if (!_cfg.Cleanup.TranslationActive &&
             transcript.Length < _cfg.Cleanup.SkipGuardChars)
             return new CleanupResult(transcript, true, "below skip guard");
+
+        // HttpClient.Timeout does not bound the body read once ResponseHeadersRead
+        // completes SendAsync — a stalled stream would otherwise hang forever. Bound
+        // it explicitly with a linked token. A linked timeout is relabelled as an
+        // explicit timeout below, after caller cancellation is checked first.
+        // HttpClient.Timeout and connect failures deliberately keep their own message
+        // because their duration is not Ollama.TimeoutSeconds.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linked.CancelAfter(TimeSpan.FromSeconds(_cfg.Ollama.TimeoutSeconds));
+
         try
         {
             var body = JsonSerializer.Serialize(new
@@ -84,15 +94,6 @@ public sealed class OllamaClient : ITranscriptCleaner
                 BaseUrl() + "/api/generate")
             { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
-            // HttpClient.Timeout does not bound the body read once ResponseHeadersRead
-            // completes SendAsync — a stalled stream would otherwise hang forever. Bound
-            // it explicitly with a linked token. NOTE: a linked-timeout cancellation has
-            // ct.IsCancellationRequested == false, so it falls through to the general
-            // catch below (raw-transcript passthrough) — the caller-cancellation catch
-            // clause's semantics are unchanged.
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            linked.CancelAfter(TimeSpan.FromSeconds(_cfg.Ollama.TimeoutSeconds));
-
             using var resp = await _http.SendAsync(req,
                 HttpCompletionOption.ResponseHeadersRead, linked.Token);
             resp.EnsureSuccessStatusCode();
@@ -115,6 +116,11 @@ public sealed class OllamaClient : ITranscriptCleaner
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw; // caller cancelled — propagate; do not convert to a Skipped result
+        }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
+        {
+            return new CleanupResult(transcript, true,
+                $"timed out after {_cfg.Ollama.TimeoutSeconds}s");
         }
         catch (Exception ex)
         {
