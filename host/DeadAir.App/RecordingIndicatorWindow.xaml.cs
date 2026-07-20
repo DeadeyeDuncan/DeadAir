@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using DeadAir.Core;
 using DeadAir.Core.Config;
 
@@ -63,6 +64,7 @@ public partial class RecordingIndicatorWindow : Window
     // Nebula dials (config-backed via ApplyPillTuning; defaults = shipped constants).
     private double _fanGain = 3.0, _turbSpan = 0.6, _wiggleSpeed = 1.0;
     private Polyline[] _strands = null!;  // [0] = StrandHot core, [1..5] = Strand1..5
+    private readonly DispatcherTimer _statusTimer;
 
     public RecordingIndicatorWindow()
     {
@@ -70,6 +72,8 @@ public partial class RecordingIndicatorWindow : Window
         _dim.Freeze();
         _hot.Freeze();
         _strands = new[] { StrandHot, Strand1, Strand2, Strand3, Strand4, Strand5 };
+        _statusTimer = new DispatcherTimer();
+        _statusTimer.Tick += (_, _) => { _statusTimer.Stop(); HideIndicator(); };
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -104,6 +108,32 @@ public partial class RecordingIndicatorWindow : Window
             InterimText.Inlines.Add(new Run(layout.Hot) { Foreground = _hot });
     }
 
+    /// <summary>Show a status caption on the pill. Self-shows if hidden OR
+    /// mid-retract, so a caption can never arrive with no window to carry it
+    /// and can never be swallowed by an in-flight retract. Never calls
+    /// Activate(): the pill is visible during Ctrl+V injection, and taking
+    /// focus would paste the user's dictation into the pill itself.</summary>
+    public void ShowStatus(string text, bool dismiss)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => ShowStatus(text, dismiss));
+            return;
+        }
+        // IsVisible stays true for the whole 450 ms retract, so an
+        // IsVisible-only check silently drops a caption landing mid-retract.
+        if (!IsVisible || _state == ScopeState.Retracting) ShowIndicator();
+        _lastPartial = "";          // caption renders whole, not diffed vs the last partial
+        SetPartial(text);
+        _statusTimer.Stop();
+        _statusTimer.Interval = dismiss
+            ? TimeSpan.FromMilliseconds(900)
+            // 90 s, NOT 60 s: UtteranceTimeoutMs is 60 s, and a tie lets this
+            // watchdog start the retract just before the TimedOut caption lands.
+            : TimeSpan.FromMilliseconds(90_000);
+        _statusTimer.Start();
+    }
+
     /// <summary>Apply the nebula tuning dials from config, range-clamped
     /// (degrade-don't-crash: hand-edited config lands in the legal range).</summary>
     public void ApplyPillTuning(PillConfig pill)
@@ -122,6 +152,7 @@ public partial class RecordingIndicatorWindow : Window
         _nebLastT = Environment.TickCount64;
         InterimText.Inlines.Clear();
 
+        _statusTimer.Stop();
         _state = ScopeState.Igniting;   // re-show mid-retract re-ignites
         _stateT0 = Environment.TickCount64;
         _visibleTo = 0.0;
