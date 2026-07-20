@@ -124,8 +124,11 @@ exactly-once**. The contract is:
 
 ### 1. `DeadAir.Core` — `FlowOutcome` + `Orchestrator.Outcome`
 
-New enum, new event, raised at the four terminal points listed above. No existing signature
-changes. `IUserNotifier` is untouched.
+New enum, two new events (`Outcome`, `CleaningStarted`), raised at the five terminal
+points: successful/failed injection (from `finally`), the `empty` event, the `error`
+event, the utterance-timeout callback, and the `ready` reset of an in-flight
+Recording/Transcribing (→ `Interrupted`). No existing signature changes. `IUserNotifier`
+is untouched.
 
 ### 2. `DeadAir.Core` — `PillStatus` (pure mapping)
 
@@ -302,12 +305,17 @@ and confirm the text lands there while the pill is visible.
 
 Headless in `DeadAir.Core.Tests` (WPF window stays smoke-only, matching `ScopeGeometry`):
 
-- `PillStatus.ForState` returns the right caption per state × mode × translating flag,
-  including `null` for `Recording` and `Idle`.
-- `PillStatus.ForOutcome` covers all four outcomes and every one sets `Dismiss: true`.
-- `Orchestrator` raises `Outcome.NothingHeard` on the `empty` event, `Failed` on `error`,
-  `TimedOut` from the timeout callback, and `Injected` after a successful inject.
-- `Outcome` fires exactly once per utterance.
+- `PillStatus.ForState` returns the right caption per state (one argument), including
+  `null` for `Recording`, `Idle`, and `Cleaning`; cleanup captions are tested through
+  `ForCleaning(mode, translating)`; `SuppressTerminal` is true only for `Recording`.
+- `PillStatus.ForOutcome` covers all five outcomes (incl. `Interrupted`) and every one
+  sets `Dismiss: true`.
+- `Orchestrator` raises `NothingHeard` on `empty`, `Failed` on `error`, `TimedOut` from
+  the timeout callback, `Injected` after a successful inject (from `finally`, so a
+  throwing injector still raises `Failed`), and `Interrupted` on a `ready` that abandons
+  Recording/Transcribing.
+- **Last-wins is pinned, not exactly-once**: `SupersededTail_LastWins_FailedThenInjected`
+  asserts the legal `Failed → Injected` pair on a superseded tail.
 - The existing `OrchestratorTests` suite still passes with no signature changes.
 
 Manual smoke (the parts a headless test cannot reach):
