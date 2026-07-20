@@ -602,12 +602,36 @@ Controller commit scope: the pure tray projection and tests, Settings catalog po
 ### Task 4: Model rollout and final controller verification
 
 **Files:**
+- Modify: `README.md`
+- Modify: `docs/spec.md`
 - Test: `host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj`
 - Test: `host/DeadAir.slnx`
 
 **Interfaces:**
 - Consumes: all Task 1–3 interfaces plus installed Ollama model `gemma3:12b`.
 - Produces: controller-verified 12-language Settings/tray behavior, non-Latin/RTL cursor injection, unchanged failure fallback, and a target-machine configuration explicitly set to `gemma3:12b`.
+
+- [ ] **Step 0: Update active documentation to the new model and catalog**
+
+Active docs (README, docs/spec.md) still describe `qwen2.5:7b` and a two-language UI; a fresh install following README would pull the wrong model. Apply exactly these replacements — historical plans/specs stay untouched:
+
+In `README.md`:
+1. `local model (default ` + backtick + `qwen2.5:7b` + backtick + `)` → same with `gemma3:12b`.
+2. `(v1 ships English + Spanish in the UI; the` / `config value is free-form)` → `(the UI ships a 12-language catalog; the` / `config value is free-form)`.
+3. `Toggle from the tray ("Translate →` / `Spanish") or pick the language in Settings.` → `Pick the language from the tray submenu ("Translate →") or in Settings.`
+4. Line 92 architecture sketch: `qwen2.5:7b, transcript cleanup` → `gemma3:12b, transcript cleanup`.
+5. `pulled: ` + backtick + `ollama pull qwen2.5:7b` + backtick → same with `gemma3:12b`, then append to that sentence: ` An existing config.json keeps its stored model until changed in Settings (no auto-migration).`
+6. Fenced install command `ollama pull qwen2.5:7b` → `ollama pull gemma3:12b`.
+7. Config table `ollama` row: `http://127.0.0.1:11434` / `qwen2.5:7b` → `http://127.0.0.1:11434` / `gemma3:12b`.
+8. Config table `outputLanguage` row: `Free-form (UI lists English + Spanish).` → `Free-form (UI lists the 12-language catalog).`
+
+In `docs/spec.md`:
+9. Diagram box `qwen2.5:7b (ROCm/Vulkan)` → `gemma3:12b (Vulkan)` (pad with spaces to keep the box edges aligned).
+10. Example config JSON `"model": "qwen2.5:7b"` → `"model": "gemma3:12b"`.
+11. `ollama pull qwen2.5:7b` → `ollama pull gemma3:12b`.
+12. `; ` + backtick + `qwen2.5:7b` + backtick + ` pulled.` → same with `gemma3:12b`.
+
+Verification: `grep -n "qwen2.5:7b" README.md docs/spec.md` returns no hits afterward.
 
 - [ ] **Step 1: Run the final automated gates**
 
@@ -636,6 +660,7 @@ Then open DeadAir Settings, set **Ollama model** to `gemma3:12b`, and save once.
 - [ ] **Step 3: Complete the controller-only manual smoke checklist (not automated)**
 
 - [ ] Open the tray menu and hover/click "Translate →": the submenu opens, all 12 children render with the dark-red theme (no white stock popup), the checked child shows the checkmark; with a hand-edited config language, a 13th child appears checked.
+- [ ] Submenu interaction paths after the template replacement: click-outside dismisses; Escape closes; Left closes the submenu / Right and Enter open it; arrow keys walk the children; after each dismissal the submenu reopens on first attempt (mouse AND keyboard).
 - [ ] Dictate → Hindi (Devanagari), Arabic (RTL), and Mandarin (CJK); confirm each lands correctly at the cursor. This verifies the injection path is clean for non-Latin and RTL scripts.
 - [ ] Add a dictionary term, dictate it inside a non-Latin sentence, and confirm the term survives untranslated.
 - [ ] Switch language from the tray and confirm the new target applies on the next utterance without opening or saving Settings.
