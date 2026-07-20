@@ -532,4 +532,25 @@ public class OrchestratorTests
         Assert.Equal(CleanupMode.Polished, mode);
         Assert.Equal(cfg.Cleanup.TranslationActive, translating);
     }
+
+    [Fact]
+    public async Task CleaningStarted_ReportsTranslatingTrue_WhenOutputLanguageActive()
+    {
+        // Review finding: the sibling test's default config makes
+        // TranslationActive false, so a hard-coded `false` in the raise would
+        // pass the whole suite. This pins the true half — the feature's
+        // headline "translating…" caption depends on it.
+        var cfg = new AppConfig();
+        cfg.Cleanup.OutputLanguage = "Spanish";
+        var o = new Orchestrator(new FakeSidecar(),
+            new FakeCleaner(new CleanupResult("hola", false, null)),
+            new FakeInjector(true), new FakeNotifier(), cfg);
+        var seen = new List<(CleanupMode, bool)>();
+        o.CleaningStarted += (m, t) => seen.Add((m, t));
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        await o.OnSidecarEventAsync(new SidecarEvent { Event = "final", Text = "hola" });
+        var (_, translating) = Assert.Single(seen);
+        Assert.True(translating);
+    }
 }

@@ -119,6 +119,15 @@ exactly-once**. The contract is:
     caption parallels it and self-dismisses.
 - **The only suppression is Recording** (below). Anything fancier re-opens the two failed
   ownership schemes for a purely cosmetic 900 ms flicker.
+- Two more legal cosmetic sequences, found by the whole-branch review and accepted:
+  - A superseded tail's terminal can briefly overwrite a **successor utterance's progress
+    caption** when the successor has already left `Recording` (e.g. tail's `sent` lands
+    during N+1's `transcribing…`). The successor's next caption re-shows via the
+    retract-aware path; no words lost. The correct suppression predicate would need
+    "state belongs to a newer flow", which is exactly the dead ownership scheme —
+    documented instead of built.
+  - A trailing ASR `partial` can briefly replace `transcribing…` with the last heard
+    words until `CleaningStarted` redraws. Arguably a feature; the watchdog stays armed.
 
 ## Changes
 
