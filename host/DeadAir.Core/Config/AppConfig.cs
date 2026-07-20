@@ -46,7 +46,7 @@ public sealed class OllamaConfig
     // binds IPv4 loopback only, and each refused connect costs a ~2s Winsock
     // SYN-retry. OllamaClient also rewrites a configured "localhost" defensively.
     public string Url { get; set; } = "http://127.0.0.1:11434";
-    public string Model { get; set; } = "qwen2.5:7b";
+    public string Model { get; set; } = "gemma3:12b";
     public int NumCtx { get; set; } = 8192;
     public double Temperature { get; set; } = 0.1;
     public int TimeoutSeconds { get; set; } = 20;
