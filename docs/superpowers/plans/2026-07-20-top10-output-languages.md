@@ -674,3 +674,93 @@ Inspect the completed changes and confirm there are no modifications under `side
 - [ ] **Step 5: Ready for controller commit**
 
 Controller records the automated gate output and manual-smoke results; workers perform no source-control action.
+
+---
+
+### Task 5: Model default switch to `qwen3:8b` + unconditional `think:false` (spec amendment 2026-07-20)
+
+Added after rollout measurement reversed the model decision: `gemma3:12b` needs ~11–12 GB resident but this desktop's free VRAM beside whisper-server/dwm/overlays is ~11 GB (measured 81% CPU offload, 4 tok/s). `qwen3:8b` (6.6 GB resident) fits. It requires `think: false` in the request body or it streams `<think>` blocks into the injected text; sending it unconditionally is safe — verified accepted-and-ignored by non-thinking models on the installed Ollama v0.31.1.
+
+**Files:**
+- Modify: `host/DeadAir.Core/Config/AppConfig.cs`
+- Modify: `host/DeadAir.Core/Cleanup/OllamaClient.cs`
+- Modify: `host/DeadAir.Core.Tests/ConfigStoreTests.cs`
+- Modify: `host/DeadAir.Core.Tests/OllamaClientTests.cs`
+- Modify: `README.md`
+- Modify: `docs/spec.md`
+- Test: `host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj`
+
+**Interfaces:**
+- Consumes: existing `OllamaClient.CleanAsync` / `WarmUpAsync` body serialization and `CapturingHandler.LastBody` in tests.
+- Produces: `OllamaConfig.Model` default `"qwen3:8b"`; both `/api/generate` bodies carry top-level `"think": false`.
+
+- [ ] **Step 1: Write the failing tests**
+
+In `ConfigStoreTests.Load_MissingFile_ReturnsDefaults`, change the model assertion line to:
+
+```csharp
+        Assert.Equal("qwen3:8b", cfg.Ollama.Model);
+```
+
+In `OllamaClientTests.CleanAsync_PostsExpectedBodyShape`, append after the `keep_alive` assertion:
+
+```csharp
+        Assert.False(root.GetProperty("think").GetBoolean());
+```
+
+In `OllamaClientTests.WarmUp_PostsEmptyPromptWithKeepAlive_ReturnsTrue`, append after the `keep_alive` assertion:
+
+```csharp
+        Assert.False(doc.RootElement.GetProperty("think").GetBoolean());
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run from the repository root:
+
+`dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore --filter "FullyQualifiedName~ConfigStoreTests|FullyQualifiedName~OllamaClientTests"`
+
+Expected: FAIL — `Load_MissingFile_ReturnsDefaults` with `Expected: qwen3:8b` / `Actual: gemma3:12b`; the two body-shape tests with `KeyNotFoundException` (no `think` property yet).
+
+- [ ] **Step 3: Write the minimal implementation**
+
+In `host/DeadAir.Core/Config/AppConfig.cs`, change the model initializer line to:
+
+```csharp
+    public string Model { get; set; } = "qwen3:8b";
+```
+
+In `host/DeadAir.Core/Cleanup/OllamaClient.cs`, in `CleanAsync`'s serialized body, insert between `prompt = transcript,` and `stream = true,`:
+
+```csharp
+                // qwen3 streams <think> blocks into the response unless disabled.
+                // Sent unconditionally: non-thinking models ignore it (verified
+                // on Ollama v0.31.1, 2026-07-20).
+                think = false,
+```
+
+In `WarmUpAsync`'s serialized body, insert between `prompt = "",` and `stream = false,`:
+
+```csharp
+                think = false, // match CleanAsync — see comment there
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+`dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore --filter "FullyQualifiedName~ConfigStoreTests|FullyQualifiedName~OllamaClientTests"`
+
+Expected: PASS, all filtered cases.
+
+- [ ] **Step 5: Run the full test-project gate**
+
+`dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore`
+
+Expected: `Failed: 0, Passed: 192, Skipped: 0, Total: 192`.
+
+- [ ] **Step 6: Update active documentation**
+
+Replace every `gemma3:12b` occurrence in `README.md` and `docs/spec.md` with `qwen3:8b` (model name, pull commands, config table, example JSON, architecture sketch and diagram box — re-pad the diagram; `qwen3:8b` is two characters shorter). Verification: `grep -n "gemma3:12b" README.md docs/spec.md` returns no hits; the docs/spec.md diagram box edges stay aligned.
+
+- [ ] **Step 7: Ready for controller commit**
+
+Controller commit scope: model default, think plumbing, the three test edits, and the two active-doc updates.

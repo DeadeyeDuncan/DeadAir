@@ -26,13 +26,18 @@ Two real gaps:
   Mandarin Chinese, Hindi, Arabic, French, Bengali, Portuguese, Russian,
   Urdu, Indonesian, German. Dropdown total: 12 entries (English = off,
   Spanish, plus these ten).
-- **Model: `gemma3:12b`** (8.1 GB Q4). 140-language coverage — the broadest
-  open-model set, covering the full top-10. No thinking mode, so the existing
-  raw `/api/generate` streaming call works unchanged. Fits the 16 GB
-  RX 6800 XT alongside whisper-server. Accepted cost: cleanup latency roughly
-  doubles (~2–3 s per utterance vs ~1–1.5 s on the 7B).
-  - `qwen3:8b` rejected: thinking mode emits `<think>` blocks into the
-    concatenated stream; needs `think:false` plumbing plus version risk.
+- **Model: `qwen3:8b`** (5.2 GB pull, ~6.6 GB resident). 119-language
+  coverage including the full top-10. Requires `think:false` in the
+  `/api/generate` body (qwen3 otherwise emits `<think>` blocks into the
+  concatenated stream); verified accepted-and-ignored by non-thinking models
+  on the installed Ollama v0.31.1, so the client sends it unconditionally.
+  - *(Amended 2026-07-20 after rollout measurement.)* `gemma3:12b` was the
+    original pick but was reversed by hardware evidence: it needs ~11–12 GB
+    resident, and this desktop's real free VRAM beside whisper-server, dwm,
+    and overlays is ~11 GB (less mid-game) — measured 81% CPU offload and
+    4 tok/s ≈ 13 s per utterance. qwen3:8b fits the actual budget; its
+    earlier thinking-mode objection dissolved when `think:false` proved safe
+    unconditionally on this runtime.
   - Staying on `qwen2.5:7b` rejected: the Indic gap above.
 - **Tray: submenu, radio-style.** "Translate →" parent opens a language list
   (Off/English + the 11 languages); exactly one child checked.
@@ -64,7 +69,11 @@ English/Spanish `ComboBoxItem`s leave the XAML.
 
 ### 2. Config (`AppConfig`)
 
-- `OllamaConfig.Model` default: `"qwen2.5:7b"` → `"gemma3:12b"`.
+- `OllamaConfig.Model` default: `"qwen2.5:7b"` → `"qwen3:8b"` *(amended
+  2026-07-20; was `gemma3:12b`)*.
+- `OllamaClient` request bodies (`CleanAsync` and `WarmUpAsync`) gain
+  top-level `think: false` — sent unconditionally (verified ignored by
+  non-thinking models on Ollama v0.31.1).
 - `CleanupConfig.OutputLanguage` unchanged — still free-form, still
   case-insensitive English = off. Hand-edited languages outside the catalog
   keep working everywhere.
@@ -101,8 +110,8 @@ mode-aware; the dictionary keep-terms clause is language-agnostic.
 
 ### 6. Model rollout (ops, not code)
 
-1. `ollama pull gemma3:12b` (8.1 GB download).
-2. Flip Settings → "Ollama model" to `gemma3:12b` once.
+1. `ollama pull qwen3:8b` (5.2 GB download) *(amended 2026-07-20)*.
+2. Flip Settings → "Ollama model" to `qwen3:8b` once.
 3. Existing warm-up + `keep_alive` logic applies unchanged to the new model.
 
 ## Not changing
@@ -142,7 +151,8 @@ behavior untouched.
   for non-Latin and RTL scripts, the one genuine unknown; dictionary term
   survives untranslated in a non-Latin sentence; tray switch applies on next
   utterance without Settings; Ollama stopped → English + toast; latency
-  spot-check on gemma3:12b (`ollama ps` shows 100% GPU).
+  spot-check on qwen3:8b (`ollama ps` shows 100% GPU — run with the game
+  closed; a running game starves VRAM and CPU-splits any model).
 
 ## Non-goals
 
