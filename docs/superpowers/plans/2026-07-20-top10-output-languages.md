@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Branch: `feat/top10-languages`; starting HEAD: `37e139f` (spec commit rebased onto master `e6447b0`, which includes the merged pill-persistence work).
+- Branch: `feat/top10-languages`. Source-reading baseline: `37e139f` (spec commit rebased onto master `e6447b0`, which includes the merged pill-persistence work); workers start from the current branch HEAD, which also carries this plan.
 - The ordered catalog is exactly: `English`, `Spanish`, `Mandarin Chinese`, `Hindi`, `Arabic`, `French`, `Bengali`, `Portuguese`, `Russian`, `Urdu`, `Indonesian`, `German`. `English` is translation off; the remaining entries are rendered in this order.
 - `CleanupConfig.OutputLanguage` remains free-form. Blank/whitespace and `English` in any casing remain translation off. A hand-edited value outside the catalog must survive Settings open/save and must appear as a checked extra tray child.
 - Change only the new-config default `OllamaConfig.Model` from `qwen2.5:7b` to `gemma3:12b`. Do not add config migration: an existing `config.json` retains its stored model until the user changes it in Settings.
@@ -275,6 +275,7 @@ Controller commit scope: the one default-model initializer and the two exact Con
 - Modify: `host/DeadAir.App/SettingsWindow.xaml`
 - Modify: `host/DeadAir.App/SettingsWindow.xaml.cs`
 - Modify: `host/DeadAir.App/App.xaml.cs`
+- Modify: `host/DeadAir.App/Theme.xaml`
 - Test: `host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj`
 
 **Interfaces:**
@@ -447,6 +448,53 @@ In the `SettingsWindow` constructor, replace the block beginning with `var outpu
 
 Leave the existing case-insensitive `Select`, `Selected`, and `OnSave` assignment unchanged. They continue to select and save either a catalog item or the appended hand-edited item.
 
+- [ ] **Step 6b: Add a submenu-capable parent style to the theme**
+
+`DeadAirMenuItem` (`host/DeadAir.App/Theme.xaml`) is a leaf-only template — a `Border`/`ContentPresenter` with no `PART_Popup` or `ItemsPresenter` — so a parent styled with it can never open its children. Add this complete keyed style to `Theme.xaml` immediately after the `DeadAirMenuItem` style (keyed resources only in this file; do not touch existing styles):
+
+```xml
+    <Style x:Key="DeadAirSubmenuItem" TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bd" Background="Transparent" Padding="8,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="18"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter Grid.Column="1" ContentSource="Header"
+                                              VerticalAlignment="Center"/>
+                            <Path Grid.Column="2" Data="M 0 0 L 4 4 L 0 8 Z"
+                                  Fill="{StaticResource MutedBrush}"
+                                  VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <Popup x:Name="PART_Popup" Placement="Right"
+                                   IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   AllowsTransparency="True" Focusable="False">
+                                <Border Background="{StaticResource PanelBrush}"
+                                        BorderBrush="{StaticResource StrokeBrush}"
+                                        BorderThickness="1" CornerRadius="6" Padding="3">
+                                    <ItemsPresenter/>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{StaticResource AccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+```
+
+The popup border deliberately mirrors `DeadAirContextMenu`'s template border (PanelBrush / StrokeBrush / 1 / 6 / 3) so the submenu panel matches the parent menu visually.
+
 - [ ] **Step 7: Replace the tray toggle fields and construction with the submenu parent**
 
 In the field declarations of `host/DeadAir.App/App.xaml.cs`, keep these two fields together and remove the `_translateLanguage` field completely:
@@ -461,9 +509,10 @@ In `BuildMenu`, replace the complete block beginning with the comment `// Like t
 ```csharp
         // Child clicks update the live config for the next utterance. Persistence
         // remains Settings-save-only, matching Polished mode's transient behavior.
+        // Parent takes the submenu-capable style; DeadAirMenuItem is leaf-only.
         var translate = new System.Windows.Controls.MenuItem
         {
-            Style = itemStyle,
+            Style = (System.Windows.Style)Current.FindResource("DeadAirSubmenuItem"),
         };
         _translateMenuItem = translate;
         SyncTranslationMenu();
@@ -586,6 +635,7 @@ Then open DeadAir Settings, set **Ollama model** to `gemma3:12b`, and save once.
 
 - [ ] **Step 3: Complete the controller-only manual smoke checklist (not automated)**
 
+- [ ] Open the tray menu and hover/click "Translate →": the submenu opens, all 12 children render with the dark-red theme (no white stock popup), the checked child shows the checkmark; with a hand-edited config language, a 13th child appears checked.
 - [ ] Dictate → Hindi (Devanagari), Arabic (RTL), and Mandarin (CJK); confirm each lands correctly at the cursor. This verifies the injection path is clean for non-Latin and RTL scripts.
 - [ ] Add a dictionary term, dictate it inside a non-Latin sentence, and confirm the term survives untranslated.
 - [ ] Switch language from the tray and confirm the new target applies on the next utterance without opening or saving Settings.
