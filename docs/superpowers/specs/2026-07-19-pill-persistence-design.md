@@ -201,7 +201,9 @@ public void ShowStatus(string text, bool dismiss)
 - calls `ShowIndicator()` first if not currently visible, so a caption can never arrive
   with no window to carry it
 - clears `_lastPartial` and writes `text` through the existing `InterimText` path
-- stops the dismiss timer; starts it only when `dismiss` is true
+- restarts the timer on every caption: 900 ms when `dismiss` is true, else the 90 s watchdog
+  (see Error handling — a swallowed handler failure must never strand a caption; a >90 s
+  cleanup briefly hides the pill and the terminal caption self-shows it again)
 - timer elapse calls the existing `HideIndicator()` (the 450 ms retract is reused unchanged)
 
 ### 4. `DeadAir.App` — rewire the state hook
