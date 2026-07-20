@@ -21,6 +21,7 @@ public partial class App : Application
     private TextWriter _log = null!;
     private System.Windows.Controls.MenuItem _modeMenuItem = null!;
     private System.Windows.Controls.MenuItem _translateMenuItem = null!;
+    private string? _handEditedLanguage;
     private RecordingIndicatorWindow _indicator = null!;
     private Mutex _singleInstance = null!;
     private FlowState _lastFlowState = FlowState.Idle;
@@ -270,14 +271,26 @@ public partial class App : Application
         // to Background priority so the tree is only mutated once the click and
         // the dismissal have finished. Config is applied immediately above, so
         // the next utterance uses the new language regardless of the redraw.
-        Dispatcher.BeginInvoke(new Action(SyncTranslationMenu),
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try { SyncTranslationMenu(); }
+            catch (Exception ex)
+            {
+                _log.WriteLine($"{DateTime.Now:HH:mm:ss} ERROR translation-menu: {ex}");
+            }
+        }),
             System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void SyncTranslationMenu()
     {
+        var configured = _config.Cleanup.OutputLanguage?.Trim();
+        if (!string.IsNullOrEmpty(configured) &&
+            !LanguageCatalog.Languages.Contains(configured,
+                StringComparer.OrdinalIgnoreCase))
+            _handEditedLanguage = configured;
         var state = TranslationMenuBuilder.Build(
-            _config.Cleanup.OutputLanguage);
+            _config.Cleanup.OutputLanguage, _handEditedLanguage);
         var itemStyle = (System.Windows.Style)Current.FindResource(
             "DeadAirMenuItem");
 

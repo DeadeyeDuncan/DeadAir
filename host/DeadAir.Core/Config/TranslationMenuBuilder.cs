@@ -11,7 +11,8 @@ public sealed record TranslationMenuState(
 
 public static class TranslationMenuBuilder
 {
-    public static TranslationMenuState Build(string? outputLanguage)
+    public static TranslationMenuState Build(
+        string? outputLanguage, string? stickyLanguage = null)
     {
         var requested = string.IsNullOrWhiteSpace(outputLanguage)
             ? "English"
@@ -22,8 +23,16 @@ public static class TranslationMenuBuilder
         var current = catalogMatch ?? requested;
 
         var languages = LanguageCatalog.Languages.ToList();
-        if (catalogMatch is null)
-            languages.Add(current);
+        var sticky = stickyLanguage?.Trim();
+        var extra = catalogMatch is null
+            ? current
+            : !string.IsNullOrWhiteSpace(sticky) &&
+              !LanguageCatalog.Languages.Contains(sticky,
+                  StringComparer.OrdinalIgnoreCase)
+                ? sticky
+                : null;
+        if (extra is not null)
+            languages.Add(extra);
 
         var options = languages
             .Select(language => new TranslationMenuOption(

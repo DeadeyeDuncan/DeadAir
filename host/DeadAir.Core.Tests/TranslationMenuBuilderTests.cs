@@ -4,6 +4,19 @@ namespace DeadAir.Core.Tests;
 
 public class TranslationMenuBuilderTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Build_BlankLanguage_MeansOff(string? outputLanguage)
+    {
+        var state = TranslationMenuBuilder.Build(outputLanguage);
+
+        Assert.Equal("Translate → Off", state.Header);
+        Assert.Equal(12, state.Options.Count);
+        Assert.True(state.Options[0].IsChecked);
+    }
+
     [Fact]
     public void Build_English_UsesOffHeaderAndChecksFirstCatalogChild()
     {
@@ -50,5 +63,40 @@ public class TranslationMenuBuilderTests
         Assert.Equal(12, state.Options.Count);
         var selected = Assert.Single(state.Options.Where(option => option.IsChecked));
         Assert.Equal("Arabic", selected.OutputLanguage);
+    }
+
+    [Fact]
+    public void Build_CatalogCurrent_ListsStickyHandEditedLanguageUnchecked()
+    {
+        var state = TranslationMenuBuilder.Build("English", "Klingon");
+
+        Assert.Equal(13, state.Options.Count);
+        Assert.True(state.Options[0].IsChecked);
+        var extra = Assert.Single(state.Options.Where(option =>
+            option.OutputLanguage == "Klingon"));
+        Assert.False(extra.IsChecked);
+        Assert.Single(state.Options.Where(option => option.IsChecked));
+    }
+
+    [Fact]
+    public void Build_HandEditedCurrentAndSticky_ListsOneCheckedExtra()
+    {
+        var state = TranslationMenuBuilder.Build("Klingon", "Klingon");
+
+        Assert.Equal(13, state.Options.Count);
+        var extra = Assert.Single(state.Options.Where(option =>
+            option.OutputLanguage == "Klingon"));
+        Assert.True(extra.IsChecked);
+        Assert.Single(state.Options.Where(option => option.IsChecked));
+    }
+
+    [Fact]
+    public void Build_CatalogCurrent_DoesNotAppendCatalogMatchingStickyLanguage()
+    {
+        var state = TranslationMenuBuilder.Build("Hindi", "arabic");
+
+        Assert.Equal(12, state.Options.Count);
+        var selected = Assert.Single(state.Options.Where(option => option.IsChecked));
+        Assert.Equal("Hindi", selected.OutputLanguage);
     }
 }
