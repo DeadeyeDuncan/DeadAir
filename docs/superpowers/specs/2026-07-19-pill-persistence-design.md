@@ -97,44 +97,28 @@ A superseded tail therefore still injects its words and still raises `Injected`;
 simply declines to draw it. Words are never lost, and the new recording's pill is never
 touched.
 
-### Historical note: the abandoned ownership approach
+### Terminal captions are LAST-WINS, not exactly-once
 
-A bare "raise on each terminal path" is **wrong**, and the existing test suite already
-pins why. `HandleFinal_TailDoesNotStompNewRecording` documents this legal sequence:
+Exactly-once terminal delivery was attempted twice (a guarded `RaiseOutcome` with
+`_utteranceId` capture and an `_outcomeRaised` flag) and both attempts were killed by
+adversarial review — see the design-history note above. This spec **does not promise
+exactly-once**. The contract is:
 
-1. A `final` enters `Cleaning`.
-2. An unsolicited `error` resets state to `Idle`.
-3. The user starts a **new** recording.
-4. The old utterance's cleanup tail still injects its words — deliberately, because words
-   are never lost — without demoting the new `Recording`.
-
-Raising unconditionally would emit `Failed` at step 2 and `Injected` at step 4. That second
-caption lands **while a new recording is live**, overwriting its scope and arming a 900 ms
-dismissal that retracts the new pill. That breaks exactly-once *and* functionally violates
-the byte-identical-Recording constraint. There are zero-fire paths too: the `ready` event
-resets `Transcribing → Idle`, and a throwing cleaner or injector reaches `finally` without
-passing an inject-site raise — in both cases the pill would hang on a stale caption.
-
-Therefore every terminal path funnels through one guarded helper:
-
-```csharp
-private void RaiseOutcome(FlowOutcome outcome, long utteranceId)
-{
-    lock (_gate)
-    {
-        if (_utteranceId != utteranceId || _outcomeRaised) return;
-        _outcomeRaised = true;
-    }
-    Outcome?.Invoke(outcome);   // always outside the lock
-}
-```
-
-- **Ownership:** an utterance that no longer owns the flow (`_utteranceId` moved on) raises
-  nothing. A superseded tail therefore injects its words **silently** — the new recording's
-  pill is never touched. This is the deliberate choice, not an oversight.
-- **Idempotence:** at most one outcome per utterance.
-- **Zero-fire coverage:** the final path raises in `finally`, so a throwing cleaner or
-  injector still lands an outcome. The `ready` reset raises `Interrupted`.
+- **Every terminal caption self-dismisses in 900 ms.** No terminal caption can strand.
+- **Last-wins.** Rare crash/reset interleavings can produce two terminal captions in
+  sequence with no recording live between them, and the later one displays. Known legal
+  sequences, all rooted in existing pinned Orchestrator behavior:
+  - `failed` → `sent`: an unsolicited `error` resets mid-`Cleaning`, then the old tail
+    still injects its words (pinned by `HandleFinal_TailDoesNotStompNewRecording`). The
+    later `sent` is the truthful final — the words DID land.
+  - `timed out` → `nothing heard` / `failed`: the utterance timeout fires, then a late
+    sidecar `empty`/`error` arrives for the same utterance.
+  - `interrupted` → another: a `ready` reset races a terminal event.
+  - A spurious caption with no utterance in flight: an unsolicited `error`/`empty` while
+    idle. The existing behavior already shows a **toast** on exactly this trigger; the
+    caption parallels it and self-dismisses.
+- **The only suppression is Recording** (below). Anything fancier re-opens the two failed
+  ownership schemes for a purely cosmetic 900 ms flicker.
 
 ## Changes
 
@@ -153,12 +137,15 @@ public readonly record struct PillCaption(string Text, bool Dismiss);
 
 public static class PillStatus
 {
-    public static PillCaption? ForState(FlowState state, CleanupMode mode, bool translating);
+    public static PillCaption? ForState(FlowState state);                       // null for Recording/Idle/Cleaning
+    public static PillCaption ForCleaning(CleanupMode mode, bool translating);  // fed by CleaningStarted
     public static PillCaption ForOutcome(FlowOutcome outcome);
+    public static bool SuppressTerminal(FlowState lastState);                   // == Recording
 }
 ```
 
-`ForState` returns `null` for `Recording` (scope only, no caption) and for `Idle`.
+`ForState` takes ONLY the state — no mode/translating parameters. The cleanup caption comes
+from `ForCleaning`, fed by `CleaningStarted`'s values (see below), never from a live re-read.
 
 | Input | Caption | Dismiss |
 |---|---|---|
@@ -218,30 +205,45 @@ public void ShowStatus(string text, bool dismiss)
 
 `App.xaml.cs` replaces the `Recording ? Show : Hide` lambda:
 
-**Construction order.** `TrayNotifier` is built at `App.xaml.cs:76` but `_orchestrator` is
-not assigned until line 97, so the hook cannot read a local. It does not need to:
-`_orchestrator` is a field (`private Orchestrator _orchestrator = null!;`), so the lambda
-reads it at *invoke* time, long after assignment. Read the mode off the field, not off
-`_config` — the tray "Polished" toggle mutates `Orchestrator.Mode`, not the config object,
-so a config read would caption a stale mode. The `is not null` guard covers only the
-never-in-practice case of a state arriving before line 97.
+The state hook no longer needs the mode at all — the cleanup caption arrives via
+`CleaningStarted` with the submitted values, so the hook only maps the state. The App
+tracks the last state (written and read on the dispatcher thread only) and uses it to
+suppress terminal captions during a live recording:
 
 ```csharp
+private FlowState _lastFlowState = FlowState.Idle;   // dispatcher-thread only
+
 var notifier = new TrayNotifier(_tray, Dispatcher, state =>
 {
+    _lastFlowState = state;
     if (state == FlowState.Recording) { _indicator.ShowIndicator(); return; }
-    var mode = _orchestrator is not null ? _orchestrator.Mode : _config.Cleanup.Mode;
-    var caption = PillStatus.ForState(state, mode, _config.Cleanup.TranslationActive);
+    var caption = PillStatus.ForState(state);
     if (caption is { } c) _indicator.ShowStatus(c.Text, c.Dismiss);
-    // Idle maps to null and is intentionally ignored: the terminal outcome
-    // caption owns dismissal, so Idle must not retract the pill here.
+    // Idle and Cleaning map to null and are deliberately ignored: the terminal
+    // outcome caption owns dismissal, and Cleaning is captioned from CleaningStarted.
 });
 
-// … existing construction at line 97 …
+// … after the existing _orchestrator construction …
+_orchestrator.CleaningStarted += (mode, translating) => Dispatcher.BeginInvoke(() =>
+{
+    try
+    {
+        if (PillStatus.SuppressTerminal(_lastFlowState)) return;
+        var c = PillStatus.ForCleaning(mode, translating);
+        _indicator.ShowStatus(c.Text, c.Dismiss);
+    }
+    catch { /* indicator failures never break the pipeline */ }
+});
+
 _orchestrator.Outcome += o => Dispatcher.BeginInvoke(() =>
 {
-    var c = PillStatus.ForOutcome(o);
-    _indicator.ShowStatus(c.Text, c.Dismiss);
+    try
+    {
+        if (PillStatus.SuppressTerminal(_lastFlowState)) return;
+        var c = PillStatus.ForOutcome(o);
+        _indicator.ShowStatus(c.Text, c.Dismiss);
+    }
+    catch { /* indicator failures never break the pipeline */ }
 });
 ```
 

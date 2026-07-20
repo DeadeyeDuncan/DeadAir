@@ -181,6 +181,34 @@ Append inside the existing `OrchestratorTests` class. `CleanupResult` is `record
     }
 
     [Fact]
+    public async Task SupersededTail_LastWins_FailedThenInjected()
+    {
+        // Spec: terminal captions are LAST-WINS, not exactly-once. This is the
+        // pinned superseded-tail sequence WITHOUT a new recording: an
+        // unsolicited error resets mid-Cleaning (raises Failed), then the old
+        // tail still injects its words (raises Injected). Both raises are
+        // correct; the App draws both briefly and the later, truthful "sent"
+        // wins. Do NOT "fix" this to raise once — two ownership schemes died
+        // trying (see the spec's design-history note).
+        var cl = new BlockingCleaner();
+        var inj = new FakeInjector(true);
+        var o = Make(new FakeSidecar(), cl, inj, new FakeNotifier());
+        var seen = Watch(o);
+        await o.OnHotkeyDownAsync();
+        await o.OnHotkeyUpAsync();
+        var finalTask = o.OnSidecarEventAsync(
+            new SidecarEvent { Event = "final", Text = "old words" });
+        await o.OnSidecarEventAsync(new SidecarEvent
+        {
+            Event = "error", Where = "asr", Message = "unsolicited",
+        });
+        cl.Gate.SetResult(new CleanupResult("old words", false, null));
+        await finalTask;
+        Assert.Equal("old words", inj.Injected);                          // words are never lost
+        Assert.Equal(new[] { FlowOutcome.Failed, FlowOutcome.Injected }, seen);  // last-wins pair
+    }
+
+    [Fact]
     public async Task CleaningStarted_ReportsModeAndTranslating()
     {
         var cfg = new AppConfig();
@@ -324,7 +352,7 @@ Every raise happens **outside** `lock (_gate)` — handlers marshal to the WPF d
 dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore
 ```
 
-Expected: PASS, total **162** (152 baseline + 10 new), 0 failed. Every pre-existing test must still pass untouched — especially `HandleFinal_TailDoesNotStompNewRecording`, `ReadyEvent_MidCleaning_DoesNotForceIdle`, and `HandleFinal_InjectorThrows_StillReturnsToIdle`.
+Expected: PASS, total **163** (152 baseline + 11 new), 0 failed. Every pre-existing test must still pass untouched — especially `HandleFinal_TailDoesNotStompNewRecording`, `ReadyEvent_MidCleaning_DoesNotForceIdle`, and `HandleFinal_InjectorThrows_StillReturnsToIdle`.
 
 - [ ] **Step 7: Stop and report — the controller commits**
 
@@ -491,7 +519,7 @@ public static class PillStatus
 dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore
 ```
 
-Expected: PASS, total **180** (162 + 18), 0 failed.
+Expected: PASS, total **181** (163 + 18), 0 failed.
 
 - [ ] **Step 5: Stop and report — the controller commits**
 
@@ -702,7 +730,7 @@ Expected: 0 errors, no new warnings attributable to this branch.
 dotnet test host/DeadAir.Core.Tests/DeadAir.Core.Tests.csproj --no-restore
 ```
 
-Expected: **180 passed, 0 failed**. A drop below 152 means a pre-existing test regressed — stop and report rather than adjusting the test.
+Expected: **181 passed, 0 failed**. A drop below 152 means a pre-existing test regressed — stop and report rather than adjusting the test.
 
 - [ ] **Step 3: Prove the protected visual is untouched — WITHOUT git**
 
@@ -721,7 +749,7 @@ Expected, byte-for-byte:
 
 Either hash differing is a hard-constraint violation — stop and report immediately.
 
-`RecordingIndicatorWindow.xaml.cs` cannot be hashed (Task 3 edits it), so instead **quote verbatim, in your report, every line you added or changed in that file**. It must be exactly four edits: the timer field, the constructor init, `ShowStatus`, and one `_statusTimer.Stop()` inside `ShowIndicator`. Any edit touching the render tick, ignition, retract, or energy follower is a violation.
+`RecordingIndicatorWindow.xaml.cs` cannot be hashed (Task 3 edits it), so instead **quote verbatim, in your report, every line you added or changed in that file**. It must be exactly five edits: the `using System.Windows.Threading;` line (it is absent from the file today), the timer field, the constructor init, `ShowStatus`, and one `_statusTimer.Stop()` inside `ShowIndicator`. Any edit touching the render tick, ignition, retract, or energy follower is a violation.
 
 - [ ] **Step 4: Report for manual smoke**
 
@@ -733,13 +761,14 @@ Do NOT run the app yourself. **The controller must rebuild before smoking** — 
 4. Stop Ollama, dictate → existing "translation skipped" toast still fires AND the pill lands on `sent`.
 5. **Focus check:** cursor in Notepad, dictate, confirm the text lands in Notepad. The pill is on screen during the paste; if it took focus the text would vanish into it.
 6. Start a new recording immediately after a `sent` caption → new scope shows, no stale caption, no early hide.
-7. **Suppression check:** dictate, and while cleanup is still running start a new recording. The old utterance's words must still be injected, and the new recording's pill must NOT be interrupted by a late `sent`.
+7. **Suppression check — note it is NOT manually reachable.** `OnHotkeyDownAsync` rejects every non-Idle state, so you cannot start a recording while cleanup runs; the superseded-tail sequence needs an unsolicited sidecar `error` interleave, which no hotkey can produce. The behavior is verified by the `SupersededTail_LastWins_FailedThenInjected` unit test instead. Manually, just confirm ordinary rapid back-to-back dictations behave: each new recording shows its scope cleanly and each `sent` self-dismisses.
 
 ---
 
 ## Notes for the implementer
 
 - Do not reintroduce Core-side outcome ownership (`RaiseOutcome`, `_outcomeRaised`, captured `_utteranceId`). Two review rounds proved it cannot work here. Suppression lives in the App layer only.
+- Terminal captions are **last-wins, not exactly-once** — this is the spec's contract, confirmed by round 3 of review. Rare interleavings legally raise two outcomes in sequence (`Failed` then `Injected` on a superseded tail; `TimedOut` then a late `empty`/`error`); each self-dismisses in 900 ms and the later caption is the truer one. `SupersededTail_LastWins_FailedThenInjected` pins the canonical pair. Do not add dedup machinery to "fix" a double caption.
 - Do not "fix" `FlowState.Idle` mapping to `null`. It is load-bearing: `Idle` follows every terminal path, and hiding on it would stomp the outcome caption instantly.
 - Do not widen `IUserNotifier`. Every fake in `OrchestratorTests` implements it.
 - Do not swallow the injector exception in `HandleFinalAsync`. The existing suite pins that it propagates; the `finally` raises the outcome before it escapes.
