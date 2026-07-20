@@ -196,6 +196,7 @@ public class OllamaClientTests
         Assert.Equal(8192, root.GetProperty("options")
             .GetProperty("num_ctx").GetInt32());
         Assert.Equal("30m", root.GetProperty("keep_alive").GetString());
+        Assert.False(root.GetProperty("think").GetBoolean());
     }
 
     [Fact]
@@ -210,6 +211,7 @@ public class OllamaClientTests
         Assert.Equal("", doc.RootElement.GetProperty("prompt").GetString());
         Assert.False(doc.RootElement.GetProperty("stream").GetBoolean());
         Assert.Equal("30m", doc.RootElement.GetProperty("keep_alive").GetString());
+        Assert.False(doc.RootElement.GetProperty("think").GetBoolean());
         // The warm-up must load the runner with the SAME context size CleanAsync
         // uses — otherwise Ollama reloads the model on the first real cleanup and
         // the warm-up doesn't actually fix the first-dictation lag.

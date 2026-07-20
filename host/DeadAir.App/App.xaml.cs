@@ -21,7 +21,7 @@ public partial class App : Application
     private TextWriter _log = null!;
     private System.Windows.Controls.MenuItem _modeMenuItem = null!;
     private System.Windows.Controls.MenuItem _translateMenuItem = null!;
-    private string _translateLanguage = "Spanish";
+    private string? _handEditedLanguage;
     private RecordingIndicatorWindow _indicator = null!;
     private Mutex _singleInstance = null!;
     private FlowState _lastFlowState = FlowState.Idle;
@@ -218,23 +218,15 @@ public partial class App : Application
         mode.Unchecked += (_, _) => _orchestrator.Mode = CleanupMode.Faithful;
         _modeMenuItem = mode;
 
-        // Like the Polished toggle this is transient: it flips the live config
-        // object (OllamaClient reads it per-utterance) but persists only when
-        // Settings is next saved.
-        _translateLanguage = _config.Cleanup.TranslationActive
-            ? _config.Cleanup.OutputLanguage.Trim() : "Spanish";
+        // Child clicks update the live config for the next utterance. Persistence
+        // remains Settings-save-only, matching Polished mode's transient behavior.
+        // Parent takes the submenu-capable style; DeadAirMenuItem is leaf-only.
         var translate = new System.Windows.Controls.MenuItem
         {
-            Header = $"Translate → {_translateLanguage}",
-            IsCheckable = true,
-            IsChecked = _config.Cleanup.TranslationActive,
-            Style = itemStyle,
+            Style = (System.Windows.Style)Current.FindResource("DeadAirSubmenuItem"),
         };
-        translate.Checked += (_, _) =>
-            _config.Cleanup.OutputLanguage = _translateLanguage;
-        translate.Unchecked += (_, _) =>
-            _config.Cleanup.OutputLanguage = "English";
         _translateMenuItem = translate;
+        SyncTranslationMenu();
 
         var settings = new System.Windows.Controls.MenuItem
         { Header = "Settings…", Style = itemStyle };
@@ -271,6 +263,54 @@ public partial class App : Application
         return menu;
     }
 
+    private void SelectTranslationLanguage(string language)
+    {
+        _config.Cleanup.OutputLanguage = language;
+        // The rebuild clears Items — which destroys the very child whose Click
+        // is still being routed, while WPF is also dismissing the menu. Defer it
+        // to Background priority so the tree is only mutated once the click and
+        // the dismissal have finished. Config is applied immediately above, so
+        // the next utterance uses the new language regardless of the redraw.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try { SyncTranslationMenu(); }
+            catch (Exception ex)
+            {
+                _log.WriteLine($"{DateTime.Now:HH:mm:ss} ERROR translation-menu: {ex}");
+            }
+        }),
+            System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private void SyncTranslationMenu()
+    {
+        var configured = _config.Cleanup.OutputLanguage?.Trim();
+        if (!string.IsNullOrEmpty(configured) &&
+            !LanguageCatalog.Languages.Contains(configured,
+                StringComparer.OrdinalIgnoreCase))
+            _handEditedLanguage = configured;
+        var state = TranslationMenuBuilder.Build(
+            _config.Cleanup.OutputLanguage, _handEditedLanguage);
+        var itemStyle = (System.Windows.Style)Current.FindResource(
+            "DeadAirMenuItem");
+
+        _translateMenuItem.Header = state.Header;
+        _translateMenuItem.Items.Clear();
+        foreach (var option in state.Options)
+        {
+            var child = new System.Windows.Controls.MenuItem
+            {
+                Header = option.Header,
+                IsCheckable = true,
+                IsChecked = option.IsChecked,
+                Style = itemStyle,
+            };
+            var language = option.OutputLanguage;
+            child.Click += (_, _) => SelectTranslationLanguage(language);
+            _translateMenuItem.Items.Add(child);
+        }
+    }
+
     private async void OnSettingsSaved()
     {
         try
@@ -278,12 +318,7 @@ public partial class App : Application
             ConfigStore.Save(_config);
             _orchestrator.Mode = _config.Cleanup.Mode; // apply live, no restart needed
             _modeMenuItem.IsChecked = _config.Cleanup.Mode == CleanupMode.Polished;
-            if (_config.Cleanup.TranslationActive)
-                _translateLanguage = _config.Cleanup.OutputLanguage.Trim();
-            _translateMenuItem.Header = $"Translate → {_translateLanguage}";
-            // Setter fires Checked/Unchecked; both handlers re-assign the same
-            // value OutputLanguage already holds, so this is idempotent.
-            _translateMenuItem.IsChecked = _config.Cleanup.TranslationActive;
+            SyncTranslationMenu();
             _indicator.ApplyPillTuning(_config.Pill);
             // Host-only changes (cleanup mode, output language, Ollama, pill,
             // prompts) must not bounce the ASR engine — the manager skips the

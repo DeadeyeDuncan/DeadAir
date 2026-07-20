@@ -71,7 +71,7 @@ Two cooperating processes plus a warm ASR server:
         ▼                                                                            ▼
 ┌─ Ollama server ─────────┐                                              ┌─ whisper-server (Vulkan) ─┐
 │ localhost:11434         │                                              │ local HTTP, model warm    │
-│ qwen2.5:7b (ROCm/Vulkan)│                                              │ large-v3-turbo GGML       │
+│ qwen3:8b (Vulkan)       │                                              │ large-v3-turbo GGML       │
 └─────────────────────────┘                                              └───────────────────────────┘
 ```
 
@@ -294,7 +294,7 @@ keys, enum values PascalCase):
     "partials": true, "partialIntervalMs": 600, "partialMinMs": 700,
     "partialWindowSeconds": 30
   },
-  "ollama": { "url": "http://localhost:11434", "model": "qwen2.5:7b", "numCtx": 8192, "temperature": 0.1, "timeoutSeconds": 20, "keepAlive": "30m" },
+  "ollama": { "url": "http://localhost:11434", "model": "qwen3:8b", "numCtx": 8192, "temperature": 0.1, "timeoutSeconds": 20, "keepAlive": "30m" },
   "cleanup": { "mode": "Faithful", "skipGuardChars": 50, "outputLanguage": "English" },
   "prompts": { "faithful": "<full text in §5>", "polished": "<full text in §5>", "translationTemplate": "<{language}/{style} directive — defaults in AppConfig.PromptsConfig>" },
   "dictionary": ["DeadMind", "gfx1030", "faster-whisper"],
@@ -325,7 +325,7 @@ Notes:
 1. Run **Const-me/Whisper** (WhisperDesktop, DX11 live-mic GUI) to confirm the
    6800 XT transcribes — validates the card with zero build effort.
 2. Install **Ollama ≥ v0.12.11** (v0.12.1–0.12.10 have a gfx1030 crash,
-   `0xc0000005`), `ollama pull qwen2.5:7b`, run it, confirm `ollama ps` shows
+   `0xc0000005`), `ollama pull qwen3:8b`, run it, confirm `ollama ps` shows
    100% GPU (ROCm; falls back to Ollama's bundled Vulkan if ROCm won't load).
    Do **not** install the `likelovewant/ollama-for-amd` fork — mainline covers
    gfx1030.
@@ -338,7 +338,7 @@ Notes:
 - .NET 8 SDK; NuGet: H.NotifyIcon (tray). Win32 via P/Invoke (no extra pkg).
 - Python 3.11+; `sounddevice`, `silero-vad` (or torch hub), `faster-whisper`,
   `requests`/`httpx`.
-- Ollama service running; `qwen2.5:7b` pulled.
+- Ollama service running; `qwen3:8b` pulled.
 - whisper.cpp Vulkan binary + `large-v3-turbo` GGML model on disk.
 
 **Read before starting:** [`drajb/whisper-local`](https://github.com/drajb/whisper-local)

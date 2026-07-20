@@ -12,7 +12,7 @@ public class ConfigStoreTests
         Assert.Equal("RControl", cfg.Hotkey.Key);
         Assert.Equal(CleanupMode.Faithful, cfg.Cleanup.Mode);
         Assert.Equal(50, cfg.Cleanup.SkipGuardChars);
-        Assert.Equal("qwen2.5:7b", cfg.Ollama.Model);
+        Assert.Equal("qwen3:8b", cfg.Ollama.Model);
         Assert.Equal(8192, cfg.Ollama.NumCtx);
         Assert.Equal("30m", cfg.Ollama.KeepAlive);
     }
@@ -59,19 +59,19 @@ public class ConfigStoreTests
     }
 
     [Fact]
-    public void OutputLanguage_RoundTrips_AndTranslationActiveNotSerialized()
+    public void OutputLanguage_RoundTrips_MultiWordValue_AndTranslationActiveNotSerialized()
     {
         var path = Path.Combine(Path.GetTempPath(),
             Guid.NewGuid().ToString(), "config.json");
         var cfg = new AppConfig();
-        cfg.Cleanup.OutputLanguage = "Spanish";
+        cfg.Cleanup.OutputLanguage = "Mandarin Chinese";
         ConfigStore.Save(cfg, path);
         var rawJson = File.ReadAllText(path);
-        Assert.Contains("\"outputLanguage\": \"Spanish\"", rawJson);
+        Assert.Contains("\"outputLanguage\": \"Mandarin Chinese\"", rawJson);
         Assert.DoesNotContain("translationActive", rawJson);
         Assert.Contains("translationTemplate", rawJson);
         var loaded = ConfigStore.Load(path);
-        Assert.Equal("Spanish", loaded.Cleanup.OutputLanguage);
+        Assert.Equal("Mandarin Chinese", loaded.Cleanup.OutputLanguage);
         Assert.True(loaded.Cleanup.TranslationActive);
     }
 }
