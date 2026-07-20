@@ -265,7 +265,13 @@ public partial class App : Application
     private void SelectTranslationLanguage(string language)
     {
         _config.Cleanup.OutputLanguage = language;
-        SyncTranslationMenu();
+        // The rebuild clears Items — which destroys the very child whose Click
+        // is still being routed, while WPF is also dismissing the menu. Defer it
+        // to Background priority so the tree is only mutated once the click and
+        // the dismissal have finished. Config is applied immediately above, so
+        // the next utterance uses the new language regardless of the redraw.
+        Dispatcher.BeginInvoke(new Action(SyncTranslationMenu),
+            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void SyncTranslationMenu()
