@@ -36,7 +36,7 @@ of seconds.
 - **Silence trimming (VAD)** — Silero VAD (via faster-whisper's vendored,
   onnxruntime-based copy, no PyTorch) drops non-speech before ASR.
 - **Local LLM cleanup via Ollama** — the raw transcript is post-processed by a
-  local model (default `qwen2.5:7b`) in one of two switchable modes:
+  local model (default `gemma3:12b`) in one of two switchable modes:
   - **Faithful** (default) — removes fillers, fixes punctuation/casing/light
     grammar, keeps self-corrections, preserves wording and technical terms.
   - **Polished** — the above, plus light rephrasing of awkward/run-on sentences.
@@ -45,7 +45,7 @@ of seconds.
     injected anyway (connect attempts are capped so a stopped Ollama fails over
     near-instantly).
 - **Output language (translation)** — optionally have your English dictation
-  injected in another language (v1 ships English + Spanish in the UI; the
+  injected in another language (the UI ships a 12-language catalog; the
   config value is free-form). Translation happens in the same single local
   LLM call as cleanup — no second LLM round-trip, nothing leaves your machine.
   (One caveat: short phrases that normally skip the LLM entirely do make the
@@ -53,8 +53,8 @@ of seconds.
   Faithful/Polished still applies (literal vs natural translation), dictionary
   and technical terms stay in English, and the skip-guard is bypassed so short
   phrases translate too. If Ollama is unavailable the raw English is injected
-  with a "translation skipped" toast. Toggle from the tray ("Translate →
-  Spanish") or pick the language in Settings.
+  with a "translation skipped" toast. Pick the language from the tray submenu
+  ("Translate →") or in Settings.
 - **Cursor injection** — clipboard-paste first (fast, format-safe), Unicode
   `SendInput` as a fallback (each UTF-16 code unit is sent, so emoji and other
   astral-plane characters go through as surrogate pairs). On a failed insert the
@@ -89,7 +89,7 @@ DeadAir.App.exe (C#/.NET 8 WPF)            asr_sidecar (Python)
         │ HTTP                                 CPU → faster-whisper
         ▼                                             │ spawns (GPU path)
   Ollama server (127.0.0.1:11434)                     ▼
-  qwen2.5:7b, transcript cleanup            whisper-server, model warm in VRAM
+  gemma3:12b, transcript cleanup            whisper-server, model warm in VRAM
 ```
 
 The host owns everything Win32-native and user-facing; the sidecar owns
@@ -134,7 +134,7 @@ tools/whisper/                whisper-server.exe goes here (gitignored)
 - **.NET 8 SDK** (host targets `net8.0-windows`, WPF).
 - **Python 3.11+** for the sidecar.
 - **Ollama** running locally (spec recommends ≥ 0.12.11) with the cleanup model
-  pulled: `ollama pull qwen2.5:7b`.
+  pulled: `ollama pull gemma3:12b`. An existing config.json keeps its stored model until changed in Settings (no auto-migration).
 - **For the GPU engine:** a whisper.cpp `whisper-server.exe` in `tools/whisper/`
   and a GGML model at `models/ggml-large-v3-turbo.bin`. Both are gitignored —
   download or build them yourself (see [GPU backends](#gpu-backends--amd--nvidia--intel)
@@ -181,7 +181,7 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 
 # 2. Ollama cleanup model
-ollama pull qwen2.5:7b
+ollama pull gemma3:12b
 
 # 3. Build the host
 cd ..\host
@@ -217,10 +217,10 @@ options:
 | `asr` | `engine` | `auto` | `auto` \| `gpu` \| `cpu`. |
 | `asr` | `gpuServerExe` / `gpuModelPath` | `..\..\tools\whisper\whisper-server.exe` / `..\..\models\ggml-large-v3-turbo.bin` | Resolved relative to the exe. |
 | `asr` | `partials`, `partialIntervalMs`, `partialMinMs`, `partialWindowSeconds` | `true`, 600, 700, 30 | Live-pill interim decode (GPU only). |
-| `ollama` | `url` / `model` | `http://127.0.0.1:11434` / `qwen2.5:7b` | `127.0.0.1`, not `localhost` (avoids a Winsock IPv6-first retry stall). |
+| `ollama` | `url` / `model` | `http://127.0.0.1:11434` / `gemma3:12b` | `127.0.0.1`, not `localhost` (avoids a Winsock IPv6-first retry stall). |
 | `ollama` | `numCtx`, `temperature`, `keepAlive`, `timeoutSeconds` | 8192, 0.1, `30m`, 20 | |
 | `cleanup` | `mode` / `skipGuardChars` | `Faithful` / 50 | Transcripts shorter than the guard bypass the LLM. |
-| `cleanup` | `outputLanguage` | `English` | Target language for injected text. `English` = translation off. Free-form (UI lists English + Spanish). |
+| `cleanup` | `outputLanguage` | `English` | Target language for injected text. `English` = translation off. Free-form (UI lists the 12-language catalog). |
 | `dictionary` | | `[]` | Terms to preserve exactly. |
 
 **Reserved but not yet honored** (persisted, currently ignored):
