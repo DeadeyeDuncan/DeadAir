@@ -141,11 +141,16 @@ behavior untouched.
 - `PromptBuilderTests`: parametrized over several new languages — directive
   present with `{language}` substituted (e.g. "Mandarin Chinese", "Arabic");
   English still means no directive.
-- Config tests: `Ollama.Model` default is `gemma3:12b`; `OutputLanguage`
-  round-trips a multi-word value ("Mandarin Chinese").
+- Config tests: `Ollama.Model` default is `qwen3:8b` *(amended 2026-07-20)*;
+  `OutputLanguage` round-trips a multi-word value ("Mandarin Chinese").
 - Tray submenu construction: extract any branchy logic (child list assembly
   incl. the extra-child case, checked-state resolution) into pure helpers so
-  it tests headless; the WPF wiring itself is smoke-only.
+  it tests headless; the WPF wiring itself is smoke-only. The hand-edited
+  extra child is **sticky for the session** — it stays listed (unchecked)
+  after the user switches to a catalog language, so selecting Off does not
+  destroy a free-form value the user would otherwise have to re-type into
+  `config.json`. *(Added 2026-07-20 after whole-branch review found the
+  non-sticky version silently erased it on the next Settings save.)*
 - Manual smoke: dictate → Hindi (Devanagari), Arabic (RTL), Mandarin (CJK)
   land correctly at the cursor — this verifies the injection path is clean
   for non-Latin and RTL scripts, the one genuine unknown; dictionary term
@@ -159,4 +164,4 @@ behavior untouched.
 Config auto-migration; per-language model routing; speech-in-X → English;
 translation-quality verification; localizing DeadAir's own UI; RTL layout in
 the pill preview (interim text stays as-is); Bengali/Urdu quality tuning
-beyond what gemma3:12b provides.
+beyond what qwen3:8b provides.

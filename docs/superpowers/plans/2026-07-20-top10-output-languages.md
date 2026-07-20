@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extend DeadAir's output-language selection to English/off plus Spanish and the ten most-spoken additional languages, and make `gemma3:12b` the default model for new configurations.
+**Goal:** Extend DeadAir's output-language selection to English/off plus Spanish and the ten most-spoken additional languages, and make `qwen3:8b` the default model for new configurations. *(Model amended 2026-07-20 — Tasks 1–4 below were authored against `gemma3:12b`; Task 5 carries the reversal and is authoritative.)*
 
 **Architecture:** `DeadAir.Core` gains one ordered `LanguageCatalog` shared by Settings and the tray, plus a pure `TranslationMenuBuilder` that projects a free-form configured language into a headless-testable parent header and radio-child list. Existing cleanup translation remains one parameterized Ollama call; WPF only renders the catalog/model and applies tray selections to the live `AppConfig`, while `ConfigStore.Save` remains confined to Settings save.
 
-**Tech Stack:** C# / .NET 8, WPF, xUnit, H.NotifyIcon.Wpf, Ollama `gemma3:12b`. Authoritative spec: `docs/superpowers/specs/2026-07-20-top10-output-languages-design.md`.
+**Tech Stack:** C# / .NET 8, WPF, xUnit, H.NotifyIcon.Wpf, Ollama `qwen3:8b` *(amended; was `gemma3:12b`)*. Authoritative spec: `docs/superpowers/specs/2026-07-20-top10-output-languages-design.md`.
 
 ## Global Constraints
 
@@ -665,7 +665,9 @@ Then open DeadAir Settings, set **Ollama model** to `gemma3:12b`, and save once.
 - [ ] Add a dictionary term, dictate it inside a non-Latin sentence, and confirm the term survives untranslated.
 - [ ] Switch language from the tray and confirm the new target applies on the next utterance without opening or saving Settings.
 - [ ] Stop Ollama while translation is active; dictate and confirm raw English lands at the cursor with a `translation skipped: {reason}` toast.
-- [ ] Spot-check latency on `gemma3:12b` and confirm `ollama ps` shows `100% GPU`.
+- [ ] Spot-check latency on `qwen3:8b` *(amended)* and confirm `ollama ps` shows `100% GPU` — run with the game closed; a running game starves VRAM and CPU-splits any model.
+- [ ] Confirm no literal `<think>` text appears in the injected output on `qwen3:8b`.
+- [ ] Hand-edited language stickiness: set a non-catalog `outputLanguage` in `config.json`, switch to Off in the tray, confirm the custom entry is still listed (unchecked) and re-selectable.
 
 - [ ] **Step 4: Confirm all explicit no-code-change boundaries**
 
