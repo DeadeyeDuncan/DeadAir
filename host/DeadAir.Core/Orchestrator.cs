@@ -138,8 +138,8 @@ public sealed class Orchestrator(
             var cleanMs = _clock.ElapsedMilliseconds - asrMs;
             if (result.Skipped && result.Reason != "below skip guard")
                 notifier.Toast(translating
-                    ? $"translation skipped: {result.Reason}"
-                    : $"cleanup skipped: {result.Reason}");
+                    ? $"translation skipped ({config.Ollama.Model}): {result.Reason}"
+                    : $"cleanup skipped ({config.Ollama.Model}): {result.Reason}");
 
             // Only advance the state if this utterance still owns it — an
             // unsolicited reset (error/empty) may have moved on, possibly into

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using DeadAir.Core.Cleanup;
 using DeadAir.Core.Config;
 
 namespace DeadAir.App;
@@ -23,15 +24,17 @@ public partial class SettingsWindow : Window
 
     private readonly AppConfig _config;
     private readonly Action _onSaved;
+    private readonly OllamaClient _ollama;
 
     private static readonly string[] HotkeyChoices =
     { "RControl", "RAlt", "CapsLock", "F13", "Scroll", "Pause" };
 
-    public SettingsWindow(AppConfig config, Action onSaved)
+    public SettingsWindow(AppConfig config, Action onSaved, OllamaClient ollama)
     {
         InitializeComponent();
         _config = config;
         _onSaved = onSaved;
+        _ollama = ollama;
         foreach (var k in HotkeyChoices)
             HotkeyBox.Items.Add(new ComboBoxItem { Content = k });
         Select(HotkeyBox, _config.Hotkey.Key);
@@ -57,6 +60,29 @@ public partial class SettingsWindow : Window
         UpdateTuningLabels();
         DictionaryBox.Text = string.Join(Environment.NewLine,
             _config.Dictionary);
+        _ = PopulateOllamaModelsAsync();
+    }
+
+    private async Task PopulateOllamaModelsAsync()
+    {
+        try
+        {
+            var models = await _ollama.ListModelsAsync();
+            if (models.Count == 0)
+                return;
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var currentText = OllamaModelBox.Text;
+                foreach (var model in models)
+                    OllamaModelBox.Items.Add(model);
+                OllamaModelBox.Text = currentText;
+            });
+        }
+        catch
+        {
+            // Model discovery is opportunistic; Settings remains free-form.
+        }
     }
 
     private static void Select(ComboBox box, string value)

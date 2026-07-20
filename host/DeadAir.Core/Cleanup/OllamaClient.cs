@@ -61,6 +61,16 @@ public sealed class OllamaClient : ITranscriptCleaner
         if (!_cfg.Cleanup.TranslationActive &&
             transcript.Length < _cfg.Cleanup.SkipGuardChars)
             return new CleanupResult(transcript, true, "below skip guard");
+
+        // HttpClient.Timeout does not bound the body read once ResponseHeadersRead
+        // completes SendAsync — a stalled stream would otherwise hang forever. Bound
+        // it explicitly with a linked token. A linked timeout is relabelled as an
+        // explicit timeout below, after caller cancellation is checked first.
+        // HttpClient.Timeout and connect failures deliberately keep their own message
+        // because their duration is not Ollama.TimeoutSeconds.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linked.CancelAfter(TimeSpan.FromSeconds(_cfg.Ollama.TimeoutSeconds));
+
         try
         {
             var body = JsonSerializer.Serialize(new
@@ -84,15 +94,6 @@ public sealed class OllamaClient : ITranscriptCleaner
                 BaseUrl() + "/api/generate")
             { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
-            // HttpClient.Timeout does not bound the body read once ResponseHeadersRead
-            // completes SendAsync — a stalled stream would otherwise hang forever. Bound
-            // it explicitly with a linked token. NOTE: a linked-timeout cancellation has
-            // ct.IsCancellationRequested == false, so it falls through to the general
-            // catch below (raw-transcript passthrough) — the caller-cancellation catch
-            // clause's semantics are unchanged.
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            linked.CancelAfter(TimeSpan.FromSeconds(_cfg.Ollama.TimeoutSeconds));
-
             using var resp = await _http.SendAsync(req,
                 HttpCompletionOption.ResponseHeadersRead, linked.Token);
             resp.EnsureSuccessStatusCode();
@@ -115,6 +116,11 @@ public sealed class OllamaClient : ITranscriptCleaner
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw; // caller cancelled — propagate; do not convert to a Skipped result
+        }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
+        {
+            return new CleanupResult(transcript, true,
+                $"timed out after {_cfg.Ollama.TimeoutSeconds}s");
         }
         catch (Exception ex)
         {
@@ -153,6 +159,36 @@ public sealed class OllamaClient : ITranscriptCleaner
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>Model names from Ollama's /api/tags, sorted. Opportunistic:
+    /// returns an empty list on any failure, never throws.</summary>
+    public async Task<IReadOnlyList<string>> ListModelsAsync(
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync(BaseUrl() + "/api/tags", ct);
+            if (!resp.IsSuccessStatusCode)
+                return Array.Empty<string>();
+
+            using var doc = JsonDocument.Parse(
+                await resp.Content.ReadAsStreamAsync(ct));
+            if (!doc.RootElement.TryGetProperty("models", out var models) ||
+                models.ValueKind != JsonValueKind.Array)
+                return Array.Empty<string>();
+
+            var names = new List<string>();
+            foreach (var model in models.EnumerateArray())
+                names.Add(model.GetProperty("name").GetString() ??
+                    throw new JsonException("Model name is null."));
+            names.Sort(StringComparer.Ordinal);
+            return names;
+        }
+        catch
+        {
+            return Array.Empty<string>();
         }
     }
 }
