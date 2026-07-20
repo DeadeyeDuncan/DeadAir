@@ -68,6 +68,10 @@ public sealed class OllamaClient : ITranscriptCleaner
                 model = _cfg.Ollama.Model,
                 system = PromptBuilder.Build(mode, _cfg),
                 prompt = transcript,
+                // qwen3 streams <think> blocks into the response unless disabled.
+                // Sent unconditionally: non-thinking models ignore it (verified
+                // on Ollama v0.31.1, 2026-07-20).
+                think = false,
                 stream = true,
                 keep_alive = _cfg.Ollama.KeepAlive,
                 options = new
@@ -132,6 +136,7 @@ public sealed class OllamaClient : ITranscriptCleaner
             {
                 model = _cfg.Ollama.Model,
                 prompt = "",
+                think = false, // match CleanAsync — see comment there
                 stream = false,
                 keep_alive = _cfg.Ollama.KeepAlive,
                 // Must match CleanAsync's load-affecting options: a warm-up at

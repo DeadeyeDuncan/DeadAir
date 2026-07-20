@@ -12,7 +12,7 @@ public class ConfigStoreTests
         Assert.Equal("RControl", cfg.Hotkey.Key);
         Assert.Equal(CleanupMode.Faithful, cfg.Cleanup.Mode);
         Assert.Equal(50, cfg.Cleanup.SkipGuardChars);
-        Assert.Equal("gemma3:12b", cfg.Ollama.Model);
+        Assert.Equal("qwen3:8b", cfg.Ollama.Model);
         Assert.Equal(8192, cfg.Ollama.NumCtx);
         Assert.Equal("30m", cfg.Ollama.KeepAlive);
     }
