@@ -185,7 +185,7 @@ ollama pull qwen3:8b
 
 # 3. Build the host
 cd ..\host
-dotnet build -c Release
+dotnet build DeadAir.App/DeadAir.App.csproj -c Release
 
 # 4. Run the built DeadAir.App.exe — a tray icon appears.
 ```
@@ -233,16 +233,21 @@ clipboard-paste with a SendInput fallback).
 ```powershell
 # Host tests (xUnit)
 cd host
-dotnet test
+dotnet test DeadAir.Core.Tests/DeadAir.Core.Tests.csproj
 
 # Sidecar tests (pytest)
-cd sidecar
+cd ..\sidecar
 .venv\Scripts\pip install -r requirements-dev.txt
 .venv\Scripts\python -m pytest
 ```
 
 Tests marked `slow` download models / need network on first run; `integration`
 tests spawn real subprocesses.
+
+The host test `DefaultConfig_ResolvesToRealRepoRootAssets` also requires the
+gitignored GPU server and model files listed under Requirements. A fresh clone
+without those files fails that asset-resolution check even when the other host
+tests pass. Install the assets before using the full host suite as a release gate.
 
 ## Known limitations
 
